@@ -1,0 +1,3 @@
+[submodule "external/elektra"]
+	path = external/elektra
+	url = https://github.com/Corralx/elektra

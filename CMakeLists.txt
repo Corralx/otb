@@ -1,0 +1,63 @@
+cmake_minimum_required (VERSION 3.0.2)
+
+project (tsc)
+
+set (SDL2_INCLUDE_PATH "" CACHE PATH "SDL2 include path")
+set (SDL2_LIB_PATH "" CACHE PATH "SDL2 library path")
+
+set (EMBREE_PATH "C:/Program Files/Intel/Embree v2.8.0 x64" CACHE PATH "Intel Embree installation path")
+
+set (GL3W_PATH ${CMAKE_SOURCE_DIR}/external/gl3w)
+set (GLM_PATH ${CMAKE_SOURCE_DIR}/external/glm)
+set (TCLAP_PATH ${CMAKE_SOURCE_DIR}/external/tclap)
+set (ELEKTRA_PATH ${CMAKE_SOURCE_DIR}/external/elektra)
+set (CPPFORMAT_PATH ${CMAKE_SOURCE_DIR}/external/cppformat)
+set (IMGUI_PATH ${CMAKE_SOURCE_DIR}/external/imgui)
+
+set (
+	GL3W_INCLUDE_PATH
+	${GL3W_PATH}/include
+)
+
+set (
+	ELEKTRA_INCLUDE_PATH
+	${ELEKTRA_PATH}/elektra/include
+	${ELEKTRA_PATH}/elektra/src
+	${ELEKTRA_PATH}/external
+)
+
+set (
+	GLM_INCLUDE_PATH
+	${GLM_PATH}
+)
+
+set (
+	TCLAP_INCLUDE_PATH
+	${TCLAP_PATH}
+)
+
+set (
+	CPPFORMAT_INCLUDE_PATH
+	${CPPFORMAT_PATH}
+)
+
+set (
+	IMGUI_INCLUDE_PATH
+	${IMGUI_PATH}/include
+)
+
+set (
+	EMBREE_INCLUDE_PATH
+	${EMBREE_PATH}/include
+)
+
+set (
+	EMBREE_LIB_PATH
+	${EMBREE_PATH}/lib
+)
+
+add_subdirectory (${GL3W_PATH})
+add_subdirectory (${ELEKTRA_PATH})
+add_subdirectory (${CPPFORMAT_PATH})
+add_subdirectory (${IMGUI_PATH})
+add_subdirectory (otb)
