@@ -9,6 +9,7 @@ set (EMBREE_PATH "C:/Program Files/Intel/Embree v2.8.0 x64" CACHE PATH "Intel Em
 
 set (GL3W_PATH ${CMAKE_SOURCE_DIR}/external/gl3w)
 set (GLM_PATH ${CMAKE_SOURCE_DIR}/external/glm)
+set (GLI_PATH ${CMAKE_SOURCE_DIR}/external/gli)
 set (TCLAP_PATH ${CMAKE_SOURCE_DIR}/external/tclap)
 set (ELEKTRA_PATH ${CMAKE_SOURCE_DIR}/external/elektra)
 set (CPPFORMAT_PATH ${CMAKE_SOURCE_DIR}/external/cppformat)
@@ -29,6 +30,11 @@ set (
 set (
 	GLM_INCLUDE_PATH
 	${GLM_PATH}
+)
+
+set (
+	GLI_INCLUDE_PATH
+	${GLI_PATH}
 )
 
 set (
