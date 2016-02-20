@@ -1,6 +1,6 @@
 cmake_minimum_required (VERSION 3.0.2)
 
-project (tsc)
+project (otb)
 
 set (SDL2_INCLUDE_PATH "" CACHE PATH "SDL2 include path")
 set (SDL2_LIB_PATH "" CACHE PATH "SDL2 library path")
