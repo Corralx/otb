@@ -10,8 +10,6 @@
 #include <xmmintrin.h>
 #include <pmmintrin.h>
 
-#include "elektra/filesystem/path.hpp"
-
 static constexpr uint32_t APP_WIDTH = 1280;
 static constexpr uint32_t APP_HEIGHT = 720;
 
