@@ -6,11 +6,13 @@ set (
 	SRC
 	main.cpp
 	imgui_impl_sdl_gl3.cpp
+	targa.c
 )
 
 set (
 	HEADER
 	imgui_impl_sdl_gl3.hpp
+	targa.h
 )
 
 set (
@@ -32,9 +34,9 @@ foreach (FILE ${ALL_FILES})
   string (REPLACE "/" "\\" GROUP "${PARENT_DIR}")
 
   if ("${FILE}" MATCHES ".*\\.cpp")
-    set (GROUP "Source Files\\${GROUP}")
+	set (GROUP "Source Files\\${GROUP}")
   elseif ("${FILE}" MATCHES ".*\\.hpp")
-    set (GROUP "Header Files\\${GROUP}")
+	set (GROUP "Header Files\\${GROUP}")
   endif ()
 
   source_group ("${GROUP}" FILES "${FILE}")

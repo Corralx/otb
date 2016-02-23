@@ -3,10 +3,16 @@
 
 #include "imgui/imgui.h"
 #include "imgui_impl_sdl_gl3.hpp"
+#include "glm/glm.hpp"
 #include "GL/gl3w.h"
 #include "SDL2/SDL.h"
 #include "tinyobjloader/tiny_obj_loader.h"
 #include "elektra/filesystem.hpp"
+
+extern "C"
+{
+#include "targa.h"
+}
 
 #pragma warning (disable : 4324)
 #include "embree2/rtcore.h"
@@ -41,6 +47,29 @@ struct bbox
 	float min_z;
 	float max_z;
 };
+
+bool same_side(const glm::vec2& p1, const glm::vec2& p2, const glm::vec2& a, const glm::vec2& b)
+{
+	auto b_minus_a = glm::vec3(b.x - a.x, b.y - a.y, .0f);
+	auto p1_minus_a = glm::vec3(p1.x - a.x, p1.y - a.y, .0f);
+	auto p2_minus_a = glm::vec3(p2.x - a.x, p2.y - a.y, .0f);
+
+	auto cp1 = glm::cross(b_minus_a, p1_minus_a);
+	auto cp2 = glm::cross(b_minus_a, p2_minus_a);
+
+	if (glm::dot(cp1, cp2) >= 0)
+		return true;
+	else
+		return false;
+}
+
+bool point_in_tris(const glm::vec2& p, const glm::vec2& a, const glm::vec2& b, const glm::vec2& c)
+{
+	if (same_side(p, a, b, c) && same_side(p, b, a, c) && same_side(p, c, a, b))
+		return true;
+	else
+		return false;
+}
 
 int main(int, char*[])
 {
@@ -133,6 +162,21 @@ int main(int, char*[])
 	if (!embree_scene)
 		std::cerr << "Error creating Embree scene!" << std::endl;
 
+	rtcDeviceSetMemoryMonitorFunction(embree_device, [](const ssize_t bytes, const bool)
+	{
+		if (bytes > 0)
+			std::cout << "EMBREE: Allocating " << bytes << " bytes of memory!" << std::endl;
+		else
+			std::cout << "EMBREE: Deallocating " << bytes << " bytes of memory!" << std::endl;
+		return true;
+	});
+
+	rtcSetProgressMonitorFunction(embree_scene, [](void*, const double n)
+	{
+		std::cout << "EMBREE: Building data structure: " << (n * 100) << "%!" << std::endl;
+		return true;
+	}, nullptr);
+
 	std::vector<uint32_t> embree_meshes;
 	for (auto& s : shapes)
 	{
@@ -171,34 +215,96 @@ int main(int, char*[])
 	else
 		std::cout << "Embree scene initialized correctly!" << std::endl;
 
-	for (auto& s : shapes)
 	{
-		uint32_t vertex_occluded = 0;
-		size_t num_vertices = s.mesh.positions.size() / 3;
-		auto vertices = s.mesh.positions;
-		auto normals = s.mesh.normals;
+		auto& plane = shapes[0].mesh;
+		elk::path path("maps/plane.tga");
 
-		for (uint32_t i = 0; i < num_vertices; ++i)
+		const uint32_t width = 1024;
+		const uint32_t height = width;
+		uint8_t* maps = new uint8_t[width * height];
+
+		for (uint32_t i = 0; i < height; ++i)
 		{
-			RTCRay ray{};
-			ray.org[0] = vertices[i * 3 + 0];
-			ray.org[1] = vertices[i * 3 + 1];
-			ray.org[2] = vertices[i * 3 + 2];
-			ray.dir[0] = normals[i * 3 + 0];
-			ray.dir[1] = normals[i * 3 + 1];
-			ray.dir[2] = normals[i * 3 + 2];
+			for (uint32_t j = 0; j < width; ++j)
+			{
+				maps[i * width + j] = 255;
 
-			ray.tnear = .0001f;
-			ray.tfar = 100.f;
+				glm::vec2 p_coord{};
+				p_coord.x = j / static_cast<float>(width);
+				p_coord.y = i / static_cast<float>(height);
 
-			ray.geomID = RTC_INVALID_GEOMETRY_ID;
+				glm::vec3 p{};
 
-			rtcOccluded(embree_scene, ray);
+				// Look up coordinates
+				for (uint32_t tris = 0; tris < plane.indices.size(); tris += 3)
+				{
+					auto v0_index = plane.indices[tris + 0];
+					auto v1_index = plane.indices[tris + 1];
+					auto v2_index = plane.indices[tris + 2];
 
-			if (ray.geomID != RTC_INVALID_GEOMETRY_ID)
-				vertex_occluded++;
+					glm::vec2 v0_coord{}, v1_coord{}, v2_coord{};
+
+					v0_coord.x = plane.texcoords[v0_index * 2 + 0];
+					v0_coord.y = plane.texcoords[v0_index * 2 + 1];
+					v1_coord.x = plane.texcoords[v1_index * 2 + 0];
+					v1_coord.y = plane.texcoords[v1_index * 2 + 1];
+					v2_coord.x = plane.texcoords[v2_index * 2 + 0];
+					v2_coord.y = plane.texcoords[v2_index * 2 + 1];
+
+					if (!point_in_tris(p_coord, v0_coord, v1_coord, v2_coord))
+						continue;
+
+					// http://answers.unity3d.com/questions/383804/calculate-uv-coordinates-of-3d-point-on-plane-of-m.html
+					glm::vec3 v0{}, v1{}, v2{};
+					v0.x = plane.positions[v0_index * 3 + 0];
+					v0.y = plane.positions[v0_index * 3 + 1];
+					v0.z = plane.positions[v0_index * 3 + 2];
+					v1.x = plane.positions[v1_index * 3 + 0];
+					v1.y = plane.positions[v1_index * 3 + 1];
+					v1.z = plane.positions[v1_index * 3 + 2];
+					v2.x = plane.positions[v2_index * 3 + 0];
+					v2.y = plane.positions[v2_index * 3 + 1];
+					v2.z = plane.positions[v2_index * 3 + 2];
+
+					auto p0_coord = v0_coord - p_coord;
+					auto p1_coord = v1_coord - p_coord;
+					auto p2_coord = v2_coord - p_coord;
+
+					auto area_tris = glm::length(glm::cross(glm::vec3(p0_coord - p1_coord, .0f), glm::vec3(p0_coord - p2_coord, .0f)));
+					auto area0 = glm::length(glm::cross(glm::vec3(p1_coord, .0f), glm::vec3(p2_coord, .0f))) / area_tris;
+					auto area1 = glm::length(glm::cross(glm::vec3(p2_coord, .0f), glm::vec3(p0_coord, .0f))) / area_tris;
+					auto area2 = glm::length(glm::cross(glm::vec3(p0_coord, .0f), glm::vec3(p1_coord, .0f))) / area_tris;
+
+					p = v0 * area0 + v1 * area1 + v2 * area2;
+					
+					RTCRay ray{};
+					ray.org[0] = p.x;
+					ray.org[1] = p.y;
+					ray.org[2] = p.z;
+					ray.dir[0] = .0f;
+					ray.dir[1] = 1.f;
+					ray.dir[2] = .0f;
+
+					ray.tnear = .0001f;
+					ray.tfar = 100.f;
+
+					ray.geomID = RTC_INVALID_GEOMETRY_ID;
+
+					rtcOccluded(embree_scene, ray);
+
+					if (ray.geomID != RTC_INVALID_GEOMETRY_ID)
+						maps[i * width + j] = 0;
+
+					break;
+				}
+			}
 		}
-		std::cout << "Shape " << s.name << " has " << vertex_occluded << " vertices occluded!" << std::endl;
+
+		auto res = tga_write_mono(path.c_str(), maps, width, height);
+		if (res != TGA_NOERR)
+			std::cerr << "Error writing tga image!" << std::endl;
+
+		delete[] maps;
 	}
 
 	bool should_run = true;
