@@ -77,7 +77,7 @@ int main(int, char*[])
 	bbox box{};
 	std::vector<tinyobj::shape_t> shapes;
 	{
-		elk::path mesh_path("chair/chair.obj");
+		elk::path mesh_path("test/test.obj");
 		std::vector<tinyobj::material_t> materials;
 		std::string error;
 		bool res = tinyobj::LoadObj(shapes, materials, error, mesh_path.c_str(), nullptr, true);
@@ -92,18 +92,16 @@ int main(int, char*[])
 			size_t num_vertices = shapes[i].mesh.positions.size() / 3;
 			size_t num_normals = shapes[i].mesh.normals.size() / 3;
 			size_t num_tex_coords = shapes[i].mesh.texcoords.size() / 2;
-			//size_t num_indices = shapes[i].mesh.indices.size() / 3;
+			size_t num_indices = shapes[i].mesh.indices.size() / 3;
 
 			assert(num_vertices == num_normals && num_vertices == num_tex_coords);
-
-			/*
+			
 			std::cout << std::endl << "Shape " << i << " (" << shapes[i].name << ")" << std::endl;
 			std::cout << "Vertices: " << num_vertices << std::endl;
 			std::cout << "Normals: " << num_normals << std::endl;
 			std::cout << "Texture coords: " << num_tex_coords << std::endl;
 			std::cout << "Indices: " << num_indices << std::endl;
-			*/
-
+			
 			auto vertices = shapes[i].mesh.positions;
 
 			for (uint32_t j = 0; j < num_vertices; ++j)
@@ -123,6 +121,8 @@ int main(int, char*[])
 			}
 		}
 	}
+
+	std::cout << std::endl;
 
 	auto embree_device = rtcNewDevice();
 	if (!embree_device)
@@ -163,6 +163,8 @@ int main(int, char*[])
 		rtcUnmapBuffer(embree_scene, id, RTC_INDEX_BUFFER);
 	}
 
+	rtcCommit(embree_scene);
+
 	auto embree_error = rtcDeviceGetError(embree_device);
 	if (embree_error != RTC_NO_ERROR)
 		std::cerr << "Error loading Embree scene!" << std::endl;
@@ -187,7 +189,7 @@ int main(int, char*[])
 			ray.dir[2] = normals[i * 3 + 2];
 
 			ray.tnear = .0001f;
-			ray.tfar = 10.f;
+			ray.tfar = 100.f;
 
 			ray.geomID = RTC_INVALID_GEOMETRY_ID;
 
