@@ -77,7 +77,7 @@ int main(int, char*[])
 	bbox box{};
 	std::vector<tinyobj::shape_t> shapes;
 	{
-		elk::path mesh_path("arch-chair/arch-chair.obj");
+		elk::path mesh_path("chair/chair.obj");
 		std::vector<tinyobj::material_t> materials;
 		std::string error;
 		bool res = tinyobj::LoadObj(shapes, materials, error, mesh_path.c_str(), nullptr, true);
