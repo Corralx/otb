@@ -13,6 +13,7 @@ set (GLI_PATH ${CMAKE_SOURCE_DIR}/external/gli)
 set (TCLAP_PATH ${CMAKE_SOURCE_DIR}/external/tclap)
 set (ELEKTRA_PATH ${CMAKE_SOURCE_DIR}/external/elektra)
 set (CPPFORMAT_PATH ${CMAKE_SOURCE_DIR}/external/cppformat)
+set (TINYOBJLOADER_PATH ${CMAKE_SOURCE_DIR}/external/tinyobjloader)
 set (IMGUI_PATH ${CMAKE_SOURCE_DIR}/external/imgui)
 
 set (
@@ -48,6 +49,11 @@ set (
 )
 
 set (
+	TINYOBJLOADER_INCLUDE_PATH
+	${TINYOBJLOADER_PATH}
+)
+
+set (
 	IMGUI_INCLUDE_PATH
 	${IMGUI_PATH}/include
 )
@@ -66,4 +72,5 @@ add_subdirectory (${GL3W_PATH})
 add_subdirectory (${ELEKTRA_PATH})
 add_subdirectory (${CPPFORMAT_PATH})
 add_subdirectory (${IMGUI_PATH})
+add_subdirectory (${TINYOBJLOADER_PATH})
 add_subdirectory (otb)

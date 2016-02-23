@@ -45,6 +45,7 @@ include_directories (${GL3W_INCLUDE_PATH})
 include_directories (${GLM_INCLUDE_PATH})
 include_directories (${GLI_INCLUDE_PATH})
 include_directories (${CPPFORMAT_INCLUDE_PATH})
+include_directories (${TINYOBJLOADER_INCLUDE_PATH})
 include_directories (${IMGUI_INCLUDE_PATH})
 include_directories (${SDL2_INCLUDE_PATH})
 include_directories (${EMBREE_INCLUDE_PATH})
@@ -66,6 +67,7 @@ target_link_libraries (
 	otb
 	elektra 
 	cppformat
+	tinyobjloader
 	imgui
 	${OPENGL_LIB}
 	${SDL2_LIB_PATH}/SDL2.lib
