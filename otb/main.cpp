@@ -324,56 +324,41 @@ int main(int, char*[])
 					auto area2 = glm::length(glm::cross(glm::vec3(p0_coord, .0f), glm::vec3(p1_coord, .0f))) / area_tris;
 
 					p = v0 * area0 + v1 * area1 + v2 * area2;
-					
-					RTCRay8 ray8{};
-					for (uint32_t ray_id = 0; ray_id < 8; ++ray_id)
-					{
-						ray8.orgx[ray_id] = p.x;
-						ray8.orgy[ray_id] = p.y;
-						ray8.orgz[ray_id] = p.z;
-
-						glm::vec3 dir = cosine_weighted_hemisphere({ .0f, 1.f, .0f });
-						ray8.dirx[ray_id] = dir.x;
-						ray8.diry[ray_id] = dir.y;
-						ray8.dirz[ray_id] = dir.z;
-
-						ray8.tnear[ray_id] = .0001f;
-						ray8.tfar[ray_id] = 20.f;
-
-						ray8.geomID[ray_id] = RTC_INVALID_GEOMETRY_ID;
-					}
-
-					rtcIntersect8(&_ray_mask, embree_scene, ray8);
 
 					uint32_t num_hit = 0;
-					for (uint32_t ray_id = 0; ray_id < 8; ++ray_id)
+					uint32_t quality = 16;
+					uint32_t samples = quality * 8;
+					for (uint32_t q = 0; q < quality; ++q)
 					{
-						if (ray8.geomID[ray_id] != RTC_INVALID_GEOMETRY_ID)
-							++num_hit;
+						RTCRay8 ray8{};
+						for (uint32_t ray_id = 0; ray_id < 8; ++ray_id)
+						{
+							ray8.orgx[ray_id] = p.x;
+							ray8.orgy[ray_id] = p.y;
+							ray8.orgz[ray_id] = p.z;
+
+							glm::vec3 dir = cosine_weighted_hemisphere({ .0f, 1.f, .0f });
+							ray8.dirx[ray_id] = dir.x;
+							ray8.diry[ray_id] = dir.y;
+							ray8.dirz[ray_id] = dir.z;
+
+							ray8.tnear[ray_id] = .0001f;
+							ray8.tfar[ray_id] = 50.f;
+
+							ray8.geomID[ray_id] = RTC_INVALID_GEOMETRY_ID;
+						}
+
+						rtcIntersect8(&_ray_mask, embree_scene, ray8);
+
+						for (uint32_t ray_id = 0; ray_id < 8; ++ray_id)
+						{
+							if (ray8.geomID[ray_id] != RTC_INVALID_GEOMETRY_ID)
+								++num_hit;
+						}
 					}
 
 					// TODO: Better mapping
-					maps[i * width + j] = (num_hit > 0) ? (static_cast<uint8_t>(255 / 8 * (8 - num_hit))) : 255;
-
-					/*
-					RTCRay ray{};
-					ray.org[0] = p.x;
-					ray.org[1] = p.y;
-					ray.org[2] = p.z;
-					ray.dir[0] = .0f;
-					ray.dir[1] = 1.f;
-					ray.dir[2] = .0f;
-
-					ray.tnear = .0001f;
-					ray.tfar = 100.f;
-
-					ray.geomID = RTC_INVALID_GEOMETRY_ID;
-
-					rtcOccluded(embree_scene, ray);
-
-					if (ray.geomID != RTC_INVALID_GEOMETRY_ID)
-						maps[i * width + j] = 0;
-					*/
+					maps[i * width + j] = (num_hit > 0) ? (static_cast<uint8_t>(255 / samples * (samples - num_hit))) : 255;
 
 					break;
 				}
