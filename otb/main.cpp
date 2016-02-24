@@ -1,5 +1,7 @@
 #include <iostream>
 #include <cstdint>
+#include <random>
+#include <algorithm>
 
 #include "imgui/imgui.h"
 #include "imgui_impl_sdl_gl3.hpp"
@@ -48,6 +50,43 @@ struct bbox
 	float max_z;
 };
 
+double random_float()
+{
+	static std::random_device rd;
+	static std::mt19937 gen(rd());
+	static std::uniform_real_distribution<> dis(.0f, 1.f);
+
+	return dis(gen);
+}
+
+glm::vec3 cosine_weighted_hemisphere(glm::vec3 n)
+{
+	double Xi1 = random_float();
+	double Xi2 = random_float();
+
+	double  theta = acos(sqrt(1.0 - Xi1));
+	double  phi = 2.0 * 3.1415926535897932384626433832795 * Xi2;
+
+	float xs = static_cast<float>(sin(theta) * cos(phi));
+	float ys = static_cast<float>(cos(theta));
+	float zs = static_cast<float>(sin(theta) * sin(phi));
+
+	glm::vec3 h = n;
+	if (abs(h.x) <= abs(h.y) && abs(h.x) <= abs(h.z))
+		h.x = 1.0;
+	else if (abs(h.y) <= abs(h.x) && abs(h.y) <= abs(h.z))
+		h.y = 1.0;
+	else
+		h.z = 1.0;
+
+
+	glm::vec3 x = glm::normalize(glm::cross(h, n));
+	glm::vec3 z = glm::normalize(glm::cross(x, n));
+
+	glm::vec3 direction = xs * x + ys * n + zs * z;
+	return glm::normalize(direction);
+}
+
 bool same_side(const glm::vec2& p1, const glm::vec2& p2, const glm::vec2& a, const glm::vec2& b)
 {
 	auto b_minus_a = glm::vec3(b.x - a.x, b.y - a.y, .0f);
@@ -63,6 +102,11 @@ bool same_side(const glm::vec2& p1, const glm::vec2& p2, const glm::vec2& a, con
 		return false;
 }
 
+struct RTCORE_ALIGN(16) ray_mask
+{
+	uint32_t _[16];
+};
+
 bool point_in_tris(const glm::vec2& p, const glm::vec2& a, const glm::vec2& b, const glm::vec2& c)
 {
 	if (same_side(p, a, b, c) && same_side(p, b, a, c) && same_side(p, c, a, b))
@@ -75,6 +119,10 @@ int main(int, char*[])
 {
 	_MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
 	_MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
+
+	ray_mask _ray_mask;
+	for (uint32_t& ui : _ray_mask._)
+		ui = 0xFFFFFFFF;
 
 	if (SDL_Init(SDL_INIT_EVERYTHING) != 0)
 	{
@@ -158,7 +206,7 @@ int main(int, char*[])
 		std::cerr << "Error initializing Embree!" << std::endl;
 
 	auto embree_scene = rtcDeviceNewScene(embree_device, RTC_SCENE_STATIC | RTC_SCENE_INCOHERENT |
-										  RTC_SCENE_HIGH_QUALITY | RTC_SCENE_ROBUST, RTC_INTERSECT1);
+										  RTC_SCENE_HIGH_QUALITY | RTC_SCENE_ROBUST, RTC_INTERSECT8);
 	if (!embree_scene)
 		std::cerr << "Error creating Embree scene!" << std::endl;
 
@@ -277,6 +325,37 @@ int main(int, char*[])
 
 					p = v0 * area0 + v1 * area1 + v2 * area2;
 					
+					RTCRay8 ray8{};
+					for (uint32_t ray_id = 0; ray_id < 8; ++ray_id)
+					{
+						ray8.orgx[ray_id] = p.x;
+						ray8.orgy[ray_id] = p.y;
+						ray8.orgz[ray_id] = p.z;
+
+						glm::vec3 dir = cosine_weighted_hemisphere({ .0f, 1.f, .0f });
+						ray8.dirx[ray_id] = dir.x;
+						ray8.diry[ray_id] = dir.y;
+						ray8.dirz[ray_id] = dir.z;
+
+						ray8.tnear[ray_id] = .0001f;
+						ray8.tfar[ray_id] = 20.f;
+
+						ray8.geomID[ray_id] = RTC_INVALID_GEOMETRY_ID;
+					}
+
+					rtcIntersect8(&_ray_mask, embree_scene, ray8);
+
+					uint32_t num_hit = 0;
+					for (uint32_t ray_id = 0; ray_id < 8; ++ray_id)
+					{
+						if (ray8.geomID[ray_id] != RTC_INVALID_GEOMETRY_ID)
+							++num_hit;
+					}
+
+					// TODO: Better mapping
+					maps[i * width + j] = (num_hit > 0) ? (static_cast<uint8_t>(255 / 8 * (8 - num_hit))) : 255;
+
+					/*
 					RTCRay ray{};
 					ray.org[0] = p.x;
 					ray.org[1] = p.y;
@@ -294,6 +373,7 @@ int main(int, char*[])
 
 					if (ray.geomID != RTC_INVALID_GEOMETRY_ID)
 						maps[i * width + j] = 0;
+					*/
 
 					break;
 				}

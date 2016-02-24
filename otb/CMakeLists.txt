@@ -65,6 +65,8 @@ set (
 	$<$<PLATFORM_ID:Windows>:opengl32>
 )
 
+add_definitions (-DNOMINMAX)
+
 target_link_libraries (
 	otb
 	elektra 
@@ -77,9 +79,9 @@ target_link_libraries (
 	${EMBREE_LIB_PATH}/embree.lib
 )
 
-set (MSVC_OPTIONS /MP)
-set (GNU_OPTIONS -std=c++11)
-set (CLANG_OPTIONS -std=c++11)
+set (MSVC_OPTIONS /MP /arch:AVX2)
+set (GNU_OPTIONS -std=c++11 -arch=core-avx2)
+set (CLANG_OPTIONS -std=c++11 -arch=core-avx2)
 
 target_compile_options (
   otb PUBLIC
