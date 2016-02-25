@@ -121,6 +121,40 @@ bool point_in_tris(const glm::vec2& p, const glm::vec2& a, const glm::vec2& b, c
 		return false;
 }
 
+struct edge_t
+{
+	edge_t() = delete;
+	edge_t(const glm::uvec2& _v0, const glm::uvec2& _v1) : v0(_v0), v1(_v1)
+	{
+		// Ordering edges so that v0 is always the lower end
+		if (_v0.y > _v1.y)
+		{
+			v0 = _v1;
+			v1 = _v0;
+		}
+	}
+
+	glm::uvec2 v0;
+	glm::uvec2 v1;
+};
+
+struct span_t
+{
+	span_t() = delete;
+	span_t(uint32_t _x0, uint32_t _x1) : x0(_x0), x1(_x1)
+	{
+		// Ordering spans so that x0 is always the lower end
+		if (_x0 > _x1)
+		{
+			x0 = _x1;
+			x1 = _x0;
+		}
+	}
+
+	uint32_t x0;
+	uint32_t x1;
+};
+
 int main(int, char*[])
 {
 	_MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
@@ -269,10 +303,142 @@ int main(int, char*[])
 	else
 		std::cout << "Embree scene initialized correctly!" << std::endl;
 
-	// TODO(Corralx): Baricentric interpolation of normals if smooth is requested, otherwise linear interpolation
-	// TODO(Corralx): Save hit distances (somehow) to vary attenuation params in real time on the model (needs compression though)
-	// TODO(Corralx): Multithread everything by clustering and subdividing in two phases (look-up/interpolation and raycasting/occlusion)
+	// TODO(Corralx): Render triangles using uv as vertices and interpolating positions/normals in hardware outputting to R32G32B32 format
 
+	// Step 1: Find the triangle index covering each pixel in the occlusion map
+	{
+		const uint32_t width = 512;
+		const uint32_t height = width;
+
+		const tinyobj::mesh_t& mesh = shapes[1].mesh;
+		//uint32_t* index_map = new uint32_t[width * height];
+
+		// Temporary(Corralx)
+		uint8_t* occlusion_map = new uint8_t[width * height];
+		memset(occlusion_map, 255, width * height);
+
+		//const size_t triangle_num = mesh.indices.size() / 3;
+
+		// For each triangle, lookup the pixel it's covering in the occlusion map through triangle scan conversion
+		// http://joshbeam.com/articles/triangle_rasterization/
+		for (uint32_t tris = 4; tris < 6; ++tris)
+		{
+			// Vertices index of current triangle
+			const uint32_t v0_index = mesh.indices[tris * 3 + 0];
+			const uint32_t v1_index = mesh.indices[tris * 3 + 1];
+			const uint32_t v2_index = mesh.indices[tris * 3 + 2];
+
+			// UV coordinates of current triangle
+			const glm::vec2 v0_coord{ mesh.texcoords[v0_index * 2 + 0],
+									  mesh.texcoords[v0_index * 2 + 1] };
+			const glm::vec2 v1_coord{ mesh.texcoords[v1_index * 2 + 0],
+									  mesh.texcoords[v1_index * 2 + 1] };
+			const glm::vec2 v2_coord{ mesh.texcoords[v2_index * 2 + 0] ,
+									  mesh.texcoords[v2_index * 2 + 1] };
+
+			// Pixel coordinates pf current triangle
+			const glm::uvec2 v0_pixel{ static_cast<uint32_t>(v0_coord.x * width + 0.5),
+									   static_cast<uint32_t>(v0_coord.y * height + 0.5) };
+			const glm::uvec2 v1_pixel{ static_cast<uint32_t>(v1_coord.x * width + 0.5),
+									   static_cast<uint32_t>(v1_coord.y * height + 0.5) };
+			const glm::uvec2 v2_pixel{ static_cast<uint32_t>(v2_coord.x * width + 0.5),
+									   static_cast<uint32_t>(v2_coord.y * height + 0.5) };
+
+			// Current triangle edges
+			const edge_t edges[3] =
+			{
+				{ v0_pixel, v1_pixel },
+				{ v1_pixel, v2_pixel },
+				{ v2_pixel, v0_pixel }
+			};
+
+			uint32_t long_edge_index = 0;
+
+			// Finding the longer edge vertically
+			{
+				uint32_t max_length = 0;
+				for (uint32_t edge_index = 0; edge_index < 3; ++edge_index)
+				{
+					uint32_t length = edges[edge_index].v1.y - edges[edge_index].v0.y;
+					if (length > max_length)
+					{
+						max_length = length;
+						long_edge_index = edge_index;
+					}
+				}
+			}
+
+			const edge_t long_edge = edges[long_edge_index];
+			const float long_edge_x_extent = static_cast<float>(long_edge.v1.x) - long_edge.v0.x;
+			const float long_edge_y_extent = static_cast<float>(long_edge.v1.y) - long_edge.v0.y;
+
+			// For each short edge, get all the pixel between it and the long edge
+			for (uint32_t short_offset = 0; short_offset < 2; ++short_offset)
+			{
+				const uint32_t short_edge_index = (long_edge_index + 1 + short_offset) % 3;
+				const edge_t short_edge = edges[short_edge_index];
+
+				const float x0_factor = static_cast<float>(short_edge.v0.y - long_edge.v0.y) / long_edge_y_extent;
+				const float x1_factor = static_cast<float>(short_edge.v1.y - long_edge.v0.y) / long_edge_y_extent;
+				const uint32_t long_segment_x0 = static_cast<uint32_t>(long_edge.v0.x + long_edge_x_extent * x0_factor);
+				const uint32_t long_segment_x1 = static_cast<uint32_t>(long_edge.v0.x + long_edge_x_extent * x1_factor);
+				const edge_t long_segment
+				{
+					{ long_segment_x0, short_edge.v0.y },
+					{ long_segment_x1, short_edge.v1.y }
+				};
+
+				// Check if an edge is parallel to the X axis because it doesn't contribute
+				// Both edges are actually checked to account for degenerates triangle
+				const float long_edge_y_diff = static_cast<float>(long_segment.v1.y - long_segment.v0.y);
+				if (std::abs(long_edge_y_diff) < .0001f)
+					continue;
+
+				const float short_edge_y_diff = static_cast<float>(short_edge.v1.y - short_edge.v0.y);
+				if (short_edge_y_diff < .0001f)
+					continue;
+
+				const float long_edge_x_diff = static_cast<float>(long_segment.v1.x) - long_segment.v0.x;
+				const float short_edge_x_diff = static_cast<float>(short_edge.v1.x) - short_edge.v0.x;
+
+				float long_interp_factor = (short_edge.v0.y - long_segment.v0.y) / long_edge_y_diff;
+				const float long_interp_step = 1.f / long_edge_y_diff;
+				float short_interp_factor = .0f;
+				const float short_interp_step = 1.f / short_edge_y_diff;
+
+				// For each row the triangle is covering
+				for (uint32_t row = long_segment.v0.y; row < long_segment.v1.y; ++row)
+				{
+					float x0 = short_edge.v0.x + (short_edge_x_diff * short_interp_factor);
+					float x1 = long_segment.v0.x + (long_edge_x_diff * long_interp_factor);
+
+					span_t span{ static_cast<uint32_t>(x0), static_cast<uint32_t>(x1) };
+
+					// If the span is degenerate there is nothing to do
+					uint32_t span_x_diff = span.x1 - span.x0;
+					if (span_x_diff != 0)
+					{
+						// Temporary(Corralx): Color each pixel
+						for (uint32_t pixel = span.x0; pixel < span.x1; ++pixel)
+						{
+							occlusion_map[row * width + pixel] = 0;
+						}
+					}
+
+					short_interp_factor += short_interp_step;
+					long_interp_factor += long_interp_step;
+				}
+			}
+		}
+
+		auto res = tga_write_mono("maps/pixels.tga", occlusion_map, width, height);
+		if (res != TGA_NOERR)
+			std::cerr << "Error writing tga image!" << std::endl;
+
+		delete[] occlusion_map;
+	}
+
+	/*
 	{
 		const tinyobj::mesh_t& plane = shapes[0].mesh;
 		const elk::path path("maps/plane.tga");
@@ -406,6 +572,7 @@ int main(int, char*[])
 
 		delete[] maps;
 	}
+	*/
 
 	bool should_run = true;
 	while (should_run)
@@ -414,8 +581,17 @@ int main(int, char*[])
 		while (SDL_PollEvent(&event))
 		{
 			ImGui_ImplSdlGL3_ProcessEvent(&event);
-			if (event.type == SDL_QUIT)
-				should_run = false;
+			switch (event.type)
+			{
+				case SDL_QUIT:
+					should_run = false;
+					break;
+
+				case SDL_KEYDOWN:
+					if (event.key.keysym.sym == SDLK_ESCAPE)
+						should_run = false;
+					break;
+			}
 		}
 		ImGui_ImplSdlGL3_NewFrame();
 
