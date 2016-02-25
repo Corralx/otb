@@ -102,6 +102,12 @@ bool same_side(const glm::vec2& p1, const glm::vec2& p2, const glm::vec2& a, con
 		return false;
 }
 
+template<typename T>
+T saturate(T value)
+{
+	return std::min(1.f, std::max(.0f, value));
+}
+
 struct RTCORE_ALIGN(16) ray_mask
 {
 	uint32_t _[16];
@@ -263,13 +269,22 @@ int main(int, char*[])
 	else
 		std::cout << "Embree scene initialized correctly!" << std::endl;
 
-	{
-		auto& plane = shapes[0].mesh;
-		elk::path path("maps/plane.tga");
+	// TODO(Corralx): Baricentric interpolation of normals if smooth is requested, otherwise linear interpolation
+	// TODO(Corralx): Save hit distances (somehow) to vary attenuation params in real time on the model (needs compression though)
+	// TODO(Corralx): Multithread everything by clustering and subdividing in two phases (look-up/interpolation and raycasting/occlusion)
 
-		const uint32_t width = 1024;
+	{
+		const tinyobj::mesh_t& plane = shapes[0].mesh;
+		const elk::path path("maps/plane.tga");
+
+		const uint32_t width = 512;
 		const uint32_t height = width;
 		uint8_t* maps = new uint8_t[width * height];
+
+		const uint32_t quality = 16;
+		const float far_distance = 50.f;
+		const float attenuation = 1.7f;
+		const float l_attenuation = 2.0f;
 
 		for (uint32_t i = 0; i < height; ++i)
 		{
@@ -277,57 +292,52 @@ int main(int, char*[])
 			{
 				maps[i * width + j] = 255;
 
-				glm::vec2 p_coord{};
-				p_coord.x = j / static_cast<float>(width);
-				p_coord.y = i / static_cast<float>(height);
-
-				glm::vec3 p{};
+				const glm::vec2 p_coord{ j / static_cast<float>(width),
+										 i / static_cast<float>(height) };
 
 				// Look up coordinates
 				for (uint32_t tris = 0; tris < plane.indices.size(); tris += 3)
 				{
-					auto v0_index = plane.indices[tris + 0];
-					auto v1_index = plane.indices[tris + 1];
-					auto v2_index = plane.indices[tris + 2];
+					const uint32_t v0_index = plane.indices[tris + 0];
+					const uint32_t v1_index = plane.indices[tris + 1];
+					const uint32_t v2_index = plane.indices[tris + 2];
 
-					glm::vec2 v0_coord{}, v1_coord{}, v2_coord{};
-
-					v0_coord.x = plane.texcoords[v0_index * 2 + 0];
-					v0_coord.y = plane.texcoords[v0_index * 2 + 1];
-					v1_coord.x = plane.texcoords[v1_index * 2 + 0];
-					v1_coord.y = plane.texcoords[v1_index * 2 + 1];
-					v2_coord.x = plane.texcoords[v2_index * 2 + 0];
-					v2_coord.y = plane.texcoords[v2_index * 2 + 1];
+					const glm::vec2 v0_coord{ plane.texcoords[v0_index * 2 + 0],
+											  plane.texcoords[v0_index * 2 + 1] };
+					const glm::vec2 v1_coord{ plane.texcoords[v1_index * 2 + 0],
+											  plane.texcoords[v1_index * 2 + 1] };
+					const glm::vec2 v2_coord{ plane.texcoords[v2_index * 2 + 0] ,
+											  plane.texcoords[v2_index * 2 + 1] };
 
 					if (!point_in_tris(p_coord, v0_coord, v1_coord, v2_coord))
 						continue;
 
 					// http://answers.unity3d.com/questions/383804/calculate-uv-coordinates-of-3d-point-on-plane-of-m.html
-					glm::vec3 v0{}, v1{}, v2{};
-					v0.x = plane.positions[v0_index * 3 + 0];
-					v0.y = plane.positions[v0_index * 3 + 1];
-					v0.z = plane.positions[v0_index * 3 + 2];
-					v1.x = plane.positions[v1_index * 3 + 0];
-					v1.y = plane.positions[v1_index * 3 + 1];
-					v1.z = plane.positions[v1_index * 3 + 2];
-					v2.x = plane.positions[v2_index * 3 + 0];
-					v2.y = plane.positions[v2_index * 3 + 1];
-					v2.z = plane.positions[v2_index * 3 + 2];
+					const glm::vec3 v0{ plane.positions[v0_index * 3 + 0],
+										plane.positions[v0_index * 3 + 1],
+										plane.positions[v0_index * 3 + 2] };
 
-					auto p0_coord = v0_coord - p_coord;
-					auto p1_coord = v1_coord - p_coord;
-					auto p2_coord = v2_coord - p_coord;
+					const glm::vec3 v1{ plane.positions[v1_index * 3 + 0],
+										plane.positions[v1_index * 3 + 1],
+										plane.positions[v1_index * 3 + 2] };
 
-					auto area_tris = glm::length(glm::cross(glm::vec3(p0_coord - p1_coord, .0f), glm::vec3(p0_coord - p2_coord, .0f)));
-					auto area0 = glm::length(glm::cross(glm::vec3(p1_coord, .0f), glm::vec3(p2_coord, .0f))) / area_tris;
-					auto area1 = glm::length(glm::cross(glm::vec3(p2_coord, .0f), glm::vec3(p0_coord, .0f))) / area_tris;
-					auto area2 = glm::length(glm::cross(glm::vec3(p0_coord, .0f), glm::vec3(p1_coord, .0f))) / area_tris;
+					const glm::vec3 v2{ plane.positions[v2_index * 3 + 0],
+										plane.positions[v2_index * 3 + 1],
+										plane.positions[v2_index * 3 + 2] };
 
-					p = v0 * area0 + v1 * area1 + v2 * area2;
+					const glm::vec2 p0_coord = v0_coord - p_coord;
+					const glm::vec2 p1_coord = v1_coord - p_coord;
+					const glm::vec2 p2_coord = v2_coord - p_coord;
+
+					const float area_tris = glm::length(glm::cross(glm::vec3(p0_coord - p1_coord, .0f), glm::vec3(p0_coord - p2_coord, .0f)));
+					const float area0 = glm::length(glm::cross(glm::vec3(p1_coord, .0f), glm::vec3(p2_coord, .0f))) / area_tris;
+					const float area1 = glm::length(glm::cross(glm::vec3(p2_coord, .0f), glm::vec3(p0_coord, .0f))) / area_tris;
+					const float area2 = glm::length(glm::cross(glm::vec3(p0_coord, .0f), glm::vec3(p1_coord, .0f))) / area_tris;
+
+					const glm::vec3 p = v0 * area0 + v1 * area1 + v2 * area2;
 
 					uint32_t num_hit = 0;
-					uint32_t quality = 16;
-					uint32_t samples = quality * 8;
+					float occlusion = .0f;
 					for (uint32_t q = 0; q < quality; ++q)
 					{
 						RTCRay8 ray8{};
@@ -337,13 +347,14 @@ int main(int, char*[])
 							ray8.orgy[ray_id] = p.y;
 							ray8.orgz[ray_id] = p.z;
 
-							glm::vec3 dir = cosine_weighted_hemisphere({ .0f, 1.f, .0f });
+							// TODO(Corralx): Actually use interpolated normal
+							const glm::vec3 dir = cosine_weighted_hemisphere({ .0f, 1.f, .0f });
 							ray8.dirx[ray_id] = dir.x;
 							ray8.diry[ray_id] = dir.y;
 							ray8.dirz[ray_id] = dir.z;
 
 							ray8.tnear[ray_id] = .0001f;
-							ray8.tfar[ray_id] = 50.f;
+							ray8.tfar[ray_id] = far_distance;
 
 							ray8.geomID[ray_id] = RTC_INVALID_GEOMETRY_ID;
 						}
@@ -353,12 +364,16 @@ int main(int, char*[])
 						for (uint32_t ray_id = 0; ray_id < 8; ++ray_id)
 						{
 							if (ray8.geomID[ray_id] != RTC_INVALID_GEOMETRY_ID)
+							{
+								occlusion += pow(saturate(ray8.tfar[ray_id] / far_distance * l_attenuation), 1 / attenuation);
 								++num_hit;
+							}
 						}
 					}
 
-					// TODO: Better mapping
-					maps[i * width + j] = (num_hit > 0) ? (static_cast<uint8_t>(255 / samples * (samples - num_hit))) : 255;
+					if (num_hit > 0)
+						occlusion /= num_hit;
+					maps[i * width + j] = static_cast<uint8_t>(occlusion * 255);
 
 					break;
 				}
