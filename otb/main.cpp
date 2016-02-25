@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <random>
 #include <algorithm>
+#include <limits>
 
 #include "imgui/imgui.h"
 #include "imgui_impl_sdl_gl3.hpp"
@@ -40,16 +41,12 @@ struct embree_triangle
 	int32_t v2;
 };
 
-struct bbox
+struct RTCORE_ALIGN(16) ray_mask
 {
-	float min_x;
-	float max_x;
-	float min_y;
-	float max_y;
-	float min_z;
-	float max_z;
+	uint32_t _[8];
 };
 
+/*
 double random_float()
 {
 	static std::random_device rd;
@@ -108,11 +105,6 @@ T saturate(T value)
 	return std::min(1.f, std::max(.0f, value));
 }
 
-struct RTCORE_ALIGN(16) ray_mask
-{
-	uint32_t _[16];
-};
-
 bool point_in_tris(const glm::vec2& p, const glm::vec2& a, const glm::vec2& b, const glm::vec2& c)
 {
 	if (same_side(p, a, b, c) && same_side(p, b, a, c) && same_side(p, c, a, b))
@@ -120,11 +112,12 @@ bool point_in_tris(const glm::vec2& p, const glm::vec2& a, const glm::vec2& b, c
 	else
 		return false;
 }
+*/
 
 struct edge_t
 {
 	edge_t() = delete;
-	edge_t(const glm::uvec2& _v0, const glm::uvec2& _v1) : v0(_v0), v1(_v1)
+	edge_t(const glm::vec2& _v0, const glm::vec2& _v1) : v0(_v0), v1(_v1)
 	{
 		// Ordering edges so that v0 is always the lower end
 		if (_v0.y > _v1.y)
@@ -134,8 +127,8 @@ struct edge_t
 		}
 	}
 
-	glm::uvec2 v0;
-	glm::uvec2 v1;
+	glm::vec2 v0;
+	glm::vec2 v1;
 };
 
 struct span_t
@@ -155,6 +148,7 @@ struct span_t
 	uint32_t x1;
 };
 
+// TODO(Corralx): Try render the triangles with the GPU using uv as vertices and outputting to RGBA8 format the triangle index
 int main(int, char*[])
 {
 	_MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
@@ -189,9 +183,8 @@ int main(int, char*[])
 
 	glViewport(0, 0, (int)ImGui::GetIO().DisplaySize.x, (int)ImGui::GetIO().DisplaySize.y);
 	glClearColor(1.f, .0f, .0f, 1.f);
-
 	SDL_GL_SetSwapInterval(0);
-	bbox box{};
+
 	std::vector<tinyobj::shape_t> shapes;
 	{
 		elk::path mesh_path("test/test.obj");
@@ -218,24 +211,6 @@ int main(int, char*[])
 			std::cout << "Normals: " << num_normals << std::endl;
 			std::cout << "Texture coords: " << num_tex_coords << std::endl;
 			std::cout << "Indices: " << num_indices << std::endl;
-			
-			auto vertices = shapes[i].mesh.positions;
-
-			for (uint32_t j = 0; j < num_vertices; ++j)
-			{
-				float x = vertices[j * 3 + 0];
-				float y = vertices[j * 3 + 1];
-				float z = vertices[j * 3 + 2];
-
-				box.max_x = box.max_x > x ? box.max_x : x;
-				box.min_x = box.min_x < x ? box.min_x : x;
-
-				box.max_y = box.max_y > y ? box.max_y : y;
-				box.min_y = box.min_y < y ? box.min_y : y;
-
-				box.max_z = box.max_z > z ? box.max_z : z;
-				box.min_z = box.min_z < z ? box.min_z : z;
-			}
 		}
 	}
 
@@ -303,30 +278,29 @@ int main(int, char*[])
 	else
 		std::cout << "Embree scene initialized correctly!" << std::endl;
 
-	// TODO(Corralx): Render triangles using uv as vertices and interpolating positions/normals in hardware outputting to R32G32B32 format
-
 	// Step 1: Find the triangle index covering each pixel in the occlusion map
+	uint32_t* indices_map;
 	{
-		const uint32_t width = 512;
+		const uint8_t ssaa_scale = 2;
+		const uint32_t width = 1024 * ssaa_scale;
 		const uint32_t height = width;
 
 		const tinyobj::mesh_t& mesh = shapes[1].mesh;
-		//uint32_t* index_map = new uint32_t[width * height];
-
-		// Temporary(Corralx)
-		uint8_t* occlusion_map = new uint8_t[width * height];
-		memset(occlusion_map, 255, width * height);
-
-		//const size_t triangle_num = mesh.indices.size() / 3;
+		const size_t triangle_num = mesh.indices.size() / 3;
+		
+		// Allocating supersampled index map and setting an invalid value used as sentinel
+		uint32_t* index_map = new uint32_t[width * height];
+		memset(index_map, 255, width * height * sizeof(uint32_t));
 
 		// For each triangle, lookup the pixel it's covering in the occlusion map through triangle scan conversion
 		// http://joshbeam.com/articles/triangle_rasterization/
-		for (uint32_t tris = 4; tris < 6; ++tris)
+		// http://www.sunshine2k.de/coding/java/TriangleRasterization/TriangleRasterization.html
+		for (uint32_t tris_index = 0; tris_index < triangle_num; ++tris_index)
 		{
 			// Vertices index of current triangle
-			const uint32_t v0_index = mesh.indices[tris * 3 + 0];
-			const uint32_t v1_index = mesh.indices[tris * 3 + 1];
-			const uint32_t v2_index = mesh.indices[tris * 3 + 2];
+			const uint32_t v0_index = mesh.indices[tris_index * 3 + 0];
+			const uint32_t v1_index = mesh.indices[tris_index * 3 + 1];
+			const uint32_t v2_index = mesh.indices[tris_index * 3 + 2];
 
 			// UV coordinates of current triangle
 			const glm::vec2 v0_coord{ mesh.texcoords[v0_index * 2 + 0],
@@ -337,12 +311,12 @@ int main(int, char*[])
 									  mesh.texcoords[v2_index * 2 + 1] };
 
 			// Pixel coordinates pf current triangle
-			const glm::uvec2 v0_pixel{ static_cast<uint32_t>(v0_coord.x * width + 0.5),
-									   static_cast<uint32_t>(v0_coord.y * height + 0.5) };
-			const glm::uvec2 v1_pixel{ static_cast<uint32_t>(v1_coord.x * width + 0.5),
-									   static_cast<uint32_t>(v1_coord.y * height + 0.5) };
-			const glm::uvec2 v2_pixel{ static_cast<uint32_t>(v2_coord.x * width + 0.5),
-									   static_cast<uint32_t>(v2_coord.y * height + 0.5) };
+			const glm::vec2 v0_pixel{ v0_coord.x * width + 0.5,
+									  v0_coord.y * height + 0.5 };
+			const glm::vec2 v1_pixel{ v1_coord.x * width + 0.5,
+									  v1_coord.y * height + 0.5 };
+			const glm::vec2 v2_pixel{ v2_coord.x * width + 0.5,
+									  v2_coord.y * height + 0.5 };
 
 			// Current triangle edges
 			const edge_t edges[3] =
@@ -352,14 +326,13 @@ int main(int, char*[])
 				{ v2_pixel, v0_pixel }
 			};
 
+			// Find the longer edge vertically
 			uint32_t long_edge_index = 0;
-
-			// Finding the longer edge vertically
 			{
-				uint32_t max_length = 0;
+				float max_length = 0;
 				for (uint32_t edge_index = 0; edge_index < 3; ++edge_index)
 				{
-					uint32_t length = edges[edge_index].v1.y - edges[edge_index].v0.y;
+					float length = edges[edge_index].v1.y - edges[edge_index].v0.y;
 					if (length > max_length)
 					{
 						max_length = length;
@@ -369,8 +342,8 @@ int main(int, char*[])
 			}
 
 			const edge_t long_edge = edges[long_edge_index];
-			const float long_edge_x_extent = static_cast<float>(long_edge.v1.x) - long_edge.v0.x;
-			const float long_edge_y_extent = static_cast<float>(long_edge.v1.y) - long_edge.v0.y;
+			const float long_edge_x_extent = long_edge.v1.x - long_edge.v0.x;
+			const float long_edge_y_extent = long_edge.v1.y - long_edge.v0.y;
 
 			// For each short edge, get all the pixel between it and the long edge
 			for (uint32_t short_offset = 0; short_offset < 2; ++short_offset)
@@ -378,10 +351,11 @@ int main(int, char*[])
 				const uint32_t short_edge_index = (long_edge_index + 1 + short_offset) % 3;
 				const edge_t short_edge = edges[short_edge_index];
 
-				const float x0_factor = static_cast<float>(short_edge.v0.y - long_edge.v0.y) / long_edge_y_extent;
-				const float x1_factor = static_cast<float>(short_edge.v1.y - long_edge.v0.y) / long_edge_y_extent;
-				const uint32_t long_segment_x0 = static_cast<uint32_t>(long_edge.v0.x + long_edge_x_extent * x0_factor);
-				const uint32_t long_segment_x1 = static_cast<uint32_t>(long_edge.v0.x + long_edge_x_extent * x1_factor);
+				// Split the long segment to just account for the part as high as the short one
+				const float x0_factor = (short_edge.v0.y - long_edge.v0.y) / long_edge_y_extent;
+				const float x1_factor = (short_edge.v1.y - long_edge.v0.y) / long_edge_y_extent;
+				const float long_segment_x0 = long_edge.v0.x + long_edge_x_extent * x0_factor;
+				const float long_segment_x1 = long_edge.v0.x + long_edge_x_extent * x1_factor;
 				const edge_t long_segment
 				{
 					{ long_segment_x0, short_edge.v0.y },
@@ -390,16 +364,16 @@ int main(int, char*[])
 
 				// Check if an edge is parallel to the X axis because it doesn't contribute
 				// Both edges are actually checked to account for degenerates triangle
-				const float long_edge_y_diff = static_cast<float>(long_segment.v1.y - long_segment.v0.y);
+				const float long_edge_y_diff = long_segment.v1.y - long_segment.v0.y;
 				if (std::abs(long_edge_y_diff) < .0001f)
 					continue;
 
-				const float short_edge_y_diff = static_cast<float>(short_edge.v1.y - short_edge.v0.y);
+				const float short_edge_y_diff = short_edge.v1.y - short_edge.v0.y;
 				if (short_edge_y_diff < .0001f)
 					continue;
 
-				const float long_edge_x_diff = static_cast<float>(long_segment.v1.x) - long_segment.v0.x;
-				const float short_edge_x_diff = static_cast<float>(short_edge.v1.x) - short_edge.v0.x;
+				const float long_edge_x_diff = long_segment.v1.x - long_segment.v0.x;
+				const float short_edge_x_diff = short_edge.v1.x - short_edge.v0.x;
 
 				float long_interp_factor = (short_edge.v0.y - long_segment.v0.y) / long_edge_y_diff;
 				const float long_interp_step = 1.f / long_edge_y_diff;
@@ -407,22 +381,22 @@ int main(int, char*[])
 				const float short_interp_step = 1.f / short_edge_y_diff;
 
 				// For each row the triangle is covering
-				for (uint32_t row = long_segment.v0.y; row < long_segment.v1.y; ++row)
+				const uint32_t starting_row = static_cast<uint32_t>(long_segment.v0.y + .5f);
+				const uint32_t ending_row = std::min(static_cast<uint32_t>(long_segment.v1.y + .5f), height);
+				for (uint32_t row = starting_row; row < ending_row; ++row)
 				{
-					float x0 = short_edge.v0.x + (short_edge_x_diff * short_interp_factor);
-					float x1 = long_segment.v0.x + (long_edge_x_diff * long_interp_factor);
+					const float x0 = short_edge.v0.x + (short_edge_x_diff * short_interp_factor);
+					const float x1 = long_segment.v0.x + (long_edge_x_diff * long_interp_factor);
 
-					span_t span{ static_cast<uint32_t>(x0), static_cast<uint32_t>(x1) };
+					span_t span{ static_cast<uint32_t>(x0 + .5f), std::min(static_cast<uint32_t>(x1 + .5f), width) };
 
 					// If the span is degenerate there is nothing to do
 					uint32_t span_x_diff = span.x1 - span.x0;
 					if (span_x_diff != 0)
 					{
-						// Temporary(Corralx): Color each pixel
-						for (uint32_t pixel = span.x0; pixel < span.x1; ++pixel)
-						{
-							occlusion_map[row * width + pixel] = 0;
-						}
+						// Save the current triangle index in the current pixel position
+						for (uint32_t column = span.x0; column < span.x1; ++column)
+							index_map[row * width + column] = tris_index;
 					}
 
 					short_interp_factor += short_interp_step;
@@ -431,14 +405,80 @@ int main(int, char*[])
 			}
 		}
 
-		auto res = tga_write_mono("maps/pixels.tga", occlusion_map, width, height);
+		const uint32_t scaled_height = height / ssaa_scale;
+		const uint32_t scaled_width = width / ssaa_scale;
+		indices_map = new uint32_t[scaled_width * scaled_height];
+
+		for (uint32_t i = 0; i < scaled_height; ++i)
+		{
+			for (uint32_t j = 0; j < scaled_width; ++j)
+			{
+				uint32_t samples[ssaa_scale * ssaa_scale] = {};
+
+				// Collect all samples associated with this pixel
+				for (uint32_t i_sample = 0; i_sample < ssaa_scale; ++i_sample)
+				{
+					for (uint32_t j_sample = 0; j_sample < ssaa_scale; ++j_sample)
+					{
+						const uint32_t dst_index = i_sample * ssaa_scale + j_sample;
+						const uint32_t src_index = (i * ssaa_scale + i_sample) * width + j * ssaa_scale + j_sample;
+						samples[dst_index] = index_map[src_index];
+					}
+				}
+
+				uint32_t best_sample = std::numeric_limits<uint32_t>::max();
+				ptrdiff_t sample_count = 0;
+				uint32_t valid_sample = std::numeric_limits<uint32_t>::max();
+
+				// Look for the samples with the higher count
+				for (uint32_t sample_idx = 0; sample_idx < ssaa_scale * ssaa_scale; ++sample_idx)
+				{
+					ptrdiff_t count = std::count(std::begin(samples), std::end(samples), samples[sample_idx]);
+					if (count > sample_count)
+					{
+						sample_count = count;
+						best_sample = samples[sample_idx];
+					}
+
+					// Saving a valid sample for later, in case we don't find a sample which dominates
+					if (samples[sample_idx] != std::numeric_limits<uint32_t>::max())
+						valid_sample = samples[sample_idx];
+				}
+
+				// We may have an even distribution of samples and choosen an invalid one in the previous loop
+				// If there was a valid sample we use it, if not then all samples are invalid so is safe to use it
+				if (best_sample == std::numeric_limits<uint32_t>::max())
+					best_sample = valid_sample;
+
+				indices_map[i * scaled_width + j] = best_sample;
+			}
+		}
+
+		/*
+		uint8_t* ocmap = new uint8_t[scaled_width * scaled_height];
+		memset(ocmap, 255, scaled_width * scaled_height);
+
+		for (uint32_t i = 0; i < scaled_height; ++i)
+		{
+			for (uint32_t j = 0; j < scaled_width; ++j)
+			{
+				uint32_t index = i * scaled_width + j;
+				if (indices_map[index] != std::numeric_limits<uint32_t>::max())
+					ocmap[index] = 0;
+			}
+		}
+		
+		auto res = tga_write_mono("maps/pixels.tga", ocmap, scaled_width, scaled_height);
 		if (res != TGA_NOERR)
 			std::cerr << "Error writing tga image!" << std::endl;
 
-		delete[] occlusion_map;
+		delete[] ocmap;
+		*/
+
+		delete[] index_map;
 	}
 
-	/*
+	/* Old method (slow as fuck), looking for each pixel through every triangle, and interpolating using uv values
 	{
 		const tinyobj::mesh_t& plane = shapes[0].mesh;
 		const elk::path path("maps/plane.tga");
