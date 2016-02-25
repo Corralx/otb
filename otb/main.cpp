@@ -277,14 +277,15 @@ int main(int, char*[])
 		const tinyobj::mesh_t& plane = shapes[0].mesh;
 		const elk::path path("maps/plane.tga");
 
-		const uint32_t width = 512;
+		const uint32_t width = 1024;
 		const uint32_t height = width;
 		uint8_t* maps = new uint8_t[width * height];
 
 		const uint32_t quality = 16;
-		const float far_distance = 50.f;
+		const float far_distance = 30.f;
 		const float attenuation = 1.7f;
 		const float l_attenuation = 2.0f;
+		const bool smooth_interp_normal = true;
 
 		for (uint32_t i = 0; i < height; ++i)
 		{
@@ -292,8 +293,8 @@ int main(int, char*[])
 			{
 				maps[i * width + j] = 255;
 
-				const glm::vec2 p_coord{ j / static_cast<float>(width),
-										 i / static_cast<float>(height) };
+				const glm::vec2 p_coord{ j / (static_cast<float>(width) + 0.5),
+										 i / (static_cast<float>(height) + 0.5) };
 
 				// Look up coordinates
 				for (uint32_t tris = 0; tris < plane.indices.size(); tris += 3)
@@ -313,6 +314,15 @@ int main(int, char*[])
 						continue;
 
 					// http://answers.unity3d.com/questions/383804/calculate-uv-coordinates-of-3d-point-on-plane-of-m.html
+					const glm::vec2 p0_coord = v0_coord - p_coord;
+					const glm::vec2 p1_coord = v1_coord - p_coord;
+					const glm::vec2 p2_coord = v2_coord - p_coord;
+
+					const float area_tris = glm::length(glm::cross(glm::vec3(p0_coord - p1_coord, .0f), glm::vec3(p0_coord - p2_coord, .0f)));
+					const float area0 = glm::length(glm::cross(glm::vec3(p1_coord, .0f), glm::vec3(p2_coord, .0f))) / area_tris;
+					const float area1 = glm::length(glm::cross(glm::vec3(p2_coord, .0f), glm::vec3(p0_coord, .0f))) / area_tris;
+					const float area2 = glm::length(glm::cross(glm::vec3(p0_coord, .0f), glm::vec3(p1_coord, .0f))) / area_tris;
+
 					const glm::vec3 v0{ plane.positions[v0_index * 3 + 0],
 										plane.positions[v0_index * 3 + 1],
 										plane.positions[v0_index * 3 + 2] };
@@ -325,16 +335,25 @@ int main(int, char*[])
 										plane.positions[v2_index * 3 + 1],
 										plane.positions[v2_index * 3 + 2] };
 
-					const glm::vec2 p0_coord = v0_coord - p_coord;
-					const glm::vec2 p1_coord = v1_coord - p_coord;
-					const glm::vec2 p2_coord = v2_coord - p_coord;
-
-					const float area_tris = glm::length(glm::cross(glm::vec3(p0_coord - p1_coord, .0f), glm::vec3(p0_coord - p2_coord, .0f)));
-					const float area0 = glm::length(glm::cross(glm::vec3(p1_coord, .0f), glm::vec3(p2_coord, .0f))) / area_tris;
-					const float area1 = glm::length(glm::cross(glm::vec3(p2_coord, .0f), glm::vec3(p0_coord, .0f))) / area_tris;
-					const float area2 = glm::length(glm::cross(glm::vec3(p0_coord, .0f), glm::vec3(p1_coord, .0f))) / area_tris;
-
 					const glm::vec3 p = v0 * area0 + v1 * area1 + v2 * area2;
+
+					const glm::vec3 n0{ plane.normals[v0_index * 3 + 0],
+										plane.normals[v0_index * 3 + 1],
+										plane.normals[v0_index * 3 + 2] };
+
+					const glm::vec3 n1{ plane.normals[v1_index * 3 + 0],
+										plane.normals[v1_index * 3 + 1],
+										plane.normals[v1_index * 3 + 2] };
+
+					const glm::vec3 n2{ plane.normals[v2_index * 3 + 0],
+										plane.normals[v2_index * 3 + 1],
+										plane.normals[v2_index * 3 + 2] };
+
+					glm::vec3 n;
+					if (smooth_interp_normal)
+						n = n0 * area0 + n1 * area1 + n2 * area2;
+					else
+						n = (n0 + n1 + n2) / 3.f;
 
 					uint32_t num_hit = 0;
 					float occlusion = .0f;
@@ -347,8 +366,7 @@ int main(int, char*[])
 							ray8.orgy[ray_id] = p.y;
 							ray8.orgz[ray_id] = p.z;
 
-							// TODO(Corralx): Actually use interpolated normal
-							const glm::vec3 dir = cosine_weighted_hemisphere({ .0f, 1.f, .0f });
+							const glm::vec3 dir = cosine_weighted_hemisphere(n);
 							ray8.dirx[ray_id] = dir.x;
 							ray8.diry[ray_id] = dir.y;
 							ray8.dirz[ray_id] = dir.z;
@@ -372,8 +390,10 @@ int main(int, char*[])
 					}
 
 					if (num_hit > 0)
+					{
 						occlusion /= num_hit;
-					maps[i * width + j] = static_cast<uint8_t>(occlusion * 255);
+						maps[i * width + j] = static_cast<uint8_t>(occlusion * 255);
+					}
 
 					break;
 				}
