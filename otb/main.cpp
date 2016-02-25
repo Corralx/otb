@@ -148,7 +148,6 @@ struct span_t
 	uint32_t x1;
 };
 
-// TODO(Corralx): Try render the triangles with the GPU using uv as vertices and outputting to RGBA8 format the triangle index
 int main(int, char*[])
 {
 	_MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
