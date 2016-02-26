@@ -46,7 +46,6 @@ struct RTCORE_ALIGN(16) ray_mask
 	uint32_t _[8];
 };
 
-/*
 double random_float()
 {
 	static std::random_device rd;
@@ -84,6 +83,12 @@ glm::vec3 cosine_weighted_hemisphere(glm::vec3 n)
 	return glm::normalize(direction);
 }
 
+template<typename T>
+T saturate(T value)
+{
+	return std::min(1.f, std::max(.0f, value));
+}
+
 bool same_side(const glm::vec2& p1, const glm::vec2& p2, const glm::vec2& a, const glm::vec2& b)
 {
 	auto b_minus_a = glm::vec3(b.x - a.x, b.y - a.y, .0f);
@@ -99,20 +104,10 @@ bool same_side(const glm::vec2& p1, const glm::vec2& p2, const glm::vec2& a, con
 		return false;
 }
 
-template<typename T>
-T saturate(T value)
-{
-	return std::min(1.f, std::max(.0f, value));
-}
-
 bool point_in_tris(const glm::vec2& p, const glm::vec2& a, const glm::vec2& b, const glm::vec2& c)
 {
-	if (same_side(p, a, b, c) && same_side(p, b, a, c) && same_side(p, c, a, b))
-		return true;
-	else
-		return false;
+	return same_side(p, a, b, c) && same_side(p, b, a, c) && same_side(p, c, a, b);
 }
-*/
 
 struct edge_t
 {
@@ -276,18 +271,22 @@ int main(int, char*[])
 		std::cerr << "Error loading Embree scene!" << std::endl;
 	else
 		std::cout << "Embree scene initialized correctly!" << std::endl;
+	
+	const uint32_t mesh_index = 1;
+	const uint32_t occlusion_map_width = 512;
+	const uint32_t occlusion_map_height = occlusion_map_width;
 
 	// Step 1: Find the triangle index covering each pixel in the occlusion map
 	uint32_t* indices_map;
 	{
 		const uint8_t ssaa_scale = 2;
-		const uint32_t width = 1024 * ssaa_scale;
+		const uint32_t width = occlusion_map_width * ssaa_scale;
 		const uint32_t height = width;
 
-		const tinyobj::mesh_t& mesh = shapes[1].mesh;
+		const tinyobj::mesh_t& mesh = shapes[mesh_index].mesh;
 		const size_t triangle_num = mesh.indices.size() / 3;
 		
-		// Allocating supersampled index map and setting an invalid value used as sentinel
+		// Allocate supersampled index map and set an invalid value used as sentinel
 		uint32_t* index_map = new uint32_t[width * height];
 		memset(index_map, 255, width * height * sizeof(uint32_t));
 
@@ -404,13 +403,12 @@ int main(int, char*[])
 			}
 		}
 
-		const uint32_t scaled_height = height / ssaa_scale;
-		const uint32_t scaled_width = width / ssaa_scale;
-		indices_map = new uint32_t[scaled_width * scaled_height];
+		// Now downsample the result into the definitive indices map
+		indices_map = new uint32_t[occlusion_map_width * occlusion_map_height];
 
-		for (uint32_t i = 0; i < scaled_height; ++i)
+		for (uint32_t i = 0; i < occlusion_map_height; ++i)
 		{
-			for (uint32_t j = 0; j < scaled_width; ++j)
+			for (uint32_t j = 0; j < occlusion_map_width; ++j)
 			{
 				uint32_t samples[ssaa_scale * ssaa_scale] = {};
 
@@ -449,169 +447,205 @@ int main(int, char*[])
 				if (best_sample == std::numeric_limits<uint32_t>::max())
 					best_sample = valid_sample;
 
-				indices_map[i * scaled_width + j] = best_sample;
+				indices_map[i * occlusion_map_width + j] = best_sample;
 			}
 		}
-
-		/*
-		uint8_t* ocmap = new uint8_t[scaled_width * scaled_height];
-		memset(ocmap, 255, scaled_width * scaled_height);
-
-		for (uint32_t i = 0; i < scaled_height; ++i)
-		{
-			for (uint32_t j = 0; j < scaled_width; ++j)
-			{
-				uint32_t index = i * scaled_width + j;
-				if (indices_map[index] != std::numeric_limits<uint32_t>::max())
-					ocmap[index] = 0;
-			}
-		}
-		
-		auto res = tga_write_mono("maps/pixels.tga", ocmap, scaled_width, scaled_height);
-		if (res != TGA_NOERR)
-			std::cerr << "Error writing tga image!" << std::endl;
-
-		delete[] ocmap;
-		*/
 
 		delete[] index_map;
 	}
-
-	/* Old method (slow as fuck), looking for each pixel through every triangle, and interpolating using uv values
+	
+	/* Debug visualize the covered pixels
 	{
-		const tinyobj::mesh_t& plane = shapes[0].mesh;
-		const elk::path path("maps/plane.tga");
-
-		const uint32_t width = 1024;
-		const uint32_t height = width;
-		uint8_t* maps = new uint8_t[width * height];
-
-		const uint32_t quality = 16;
-		const float far_distance = 30.f;
-		const float attenuation = 1.7f;
-		const float l_attenuation = 2.0f;
-		const bool smooth_interp_normal = true;
-
-		for (uint32_t i = 0; i < height; ++i)
+		uint8_t* m = new uint8_t[occlusion_map_width * occlusion_map_height];
+		memset(m, 255, occlusion_map_width * occlusion_map_height);
+		for (uint32_t i = 0; i < occlusion_map_height; ++i)
 		{
-			for (uint32_t j = 0; j < width; ++j)
+			for (uint32_t j = 0; j < occlusion_map_width; ++j)
 			{
-				maps[i * width + j] = 255;
+				const uint32_t tris_index = indices_map[i * occlusion_map_width + j];
 
-				const glm::vec2 p_coord{ j / (static_cast<float>(width) + 0.5),
-										 i / (static_cast<float>(height) + 0.5) };
+				if (tris_index == std::numeric_limits<uint32_t>::max())
+					continue;
 
-				// Look up coordinates
-				for (uint32_t tris = 0; tris < plane.indices.size(); tris += 3)
-				{
-					const uint32_t v0_index = plane.indices[tris + 0];
-					const uint32_t v1_index = plane.indices[tris + 1];
-					const uint32_t v2_index = plane.indices[tris + 2];
-
-					const glm::vec2 v0_coord{ plane.texcoords[v0_index * 2 + 0],
-											  plane.texcoords[v0_index * 2 + 1] };
-					const glm::vec2 v1_coord{ plane.texcoords[v1_index * 2 + 0],
-											  plane.texcoords[v1_index * 2 + 1] };
-					const glm::vec2 v2_coord{ plane.texcoords[v2_index * 2 + 0] ,
-											  plane.texcoords[v2_index * 2 + 1] };
-
-					if (!point_in_tris(p_coord, v0_coord, v1_coord, v2_coord))
-						continue;
-
-					// http://answers.unity3d.com/questions/383804/calculate-uv-coordinates-of-3d-point-on-plane-of-m.html
-					const glm::vec2 p0_coord = v0_coord - p_coord;
-					const glm::vec2 p1_coord = v1_coord - p_coord;
-					const glm::vec2 p2_coord = v2_coord - p_coord;
-
-					const float area_tris = glm::length(glm::cross(glm::vec3(p0_coord - p1_coord, .0f), glm::vec3(p0_coord - p2_coord, .0f)));
-					const float area0 = glm::length(glm::cross(glm::vec3(p1_coord, .0f), glm::vec3(p2_coord, .0f))) / area_tris;
-					const float area1 = glm::length(glm::cross(glm::vec3(p2_coord, .0f), glm::vec3(p0_coord, .0f))) / area_tris;
-					const float area2 = glm::length(glm::cross(glm::vec3(p0_coord, .0f), glm::vec3(p1_coord, .0f))) / area_tris;
-
-					const glm::vec3 v0{ plane.positions[v0_index * 3 + 0],
-										plane.positions[v0_index * 3 + 1],
-										plane.positions[v0_index * 3 + 2] };
-
-					const glm::vec3 v1{ plane.positions[v1_index * 3 + 0],
-										plane.positions[v1_index * 3 + 1],
-										plane.positions[v1_index * 3 + 2] };
-
-					const glm::vec3 v2{ plane.positions[v2_index * 3 + 0],
-										plane.positions[v2_index * 3 + 1],
-										plane.positions[v2_index * 3 + 2] };
-
-					const glm::vec3 p = v0 * area0 + v1 * area1 + v2 * area2;
-
-					const glm::vec3 n0{ plane.normals[v0_index * 3 + 0],
-										plane.normals[v0_index * 3 + 1],
-										plane.normals[v0_index * 3 + 2] };
-
-					const glm::vec3 n1{ plane.normals[v1_index * 3 + 0],
-										plane.normals[v1_index * 3 + 1],
-										plane.normals[v1_index * 3 + 2] };
-
-					const glm::vec3 n2{ plane.normals[v2_index * 3 + 0],
-										plane.normals[v2_index * 3 + 1],
-										plane.normals[v2_index * 3 + 2] };
-
-					glm::vec3 n;
-					if (smooth_interp_normal)
-						n = n0 * area0 + n1 * area1 + n2 * area2;
-					else
-						n = (n0 + n1 + n2) / 3.f;
-
-					uint32_t num_hit = 0;
-					float occlusion = .0f;
-					for (uint32_t q = 0; q < quality; ++q)
-					{
-						RTCRay8 ray8{};
-						for (uint32_t ray_id = 0; ray_id < 8; ++ray_id)
-						{
-							ray8.orgx[ray_id] = p.x;
-							ray8.orgy[ray_id] = p.y;
-							ray8.orgz[ray_id] = p.z;
-
-							const glm::vec3 dir = cosine_weighted_hemisphere(n);
-							ray8.dirx[ray_id] = dir.x;
-							ray8.diry[ray_id] = dir.y;
-							ray8.dirz[ray_id] = dir.z;
-
-							ray8.tnear[ray_id] = .0001f;
-							ray8.tfar[ray_id] = far_distance;
-
-							ray8.geomID[ray_id] = RTC_INVALID_GEOMETRY_ID;
-						}
-
-						rtcIntersect8(&_ray_mask, embree_scene, ray8);
-
-						for (uint32_t ray_id = 0; ray_id < 8; ++ray_id)
-						{
-							if (ray8.geomID[ray_id] != RTC_INVALID_GEOMETRY_ID)
-							{
-								occlusion += pow(saturate(ray8.tfar[ray_id] / far_distance * l_attenuation), 1 / attenuation);
-								++num_hit;
-							}
-						}
-					}
-
-					if (num_hit > 0)
-					{
-						occlusion /= num_hit;
-						maps[i * width + j] = static_cast<uint8_t>(occlusion * 255);
-					}
-
-					break;
-				}
+				m[i * occlusion_map_width + j] = 0;
 			}
 		}
 
-		auto res = tga_write_mono(path.c_str(), maps, width, height);
+		auto res = tga_write_mono("maps/debug.tga", m, occlusion_map_width, occlusion_map_height);
 		if (res != TGA_NOERR)
 			std::cerr << "Error writing tga image!" << std::endl;
 
-		delete[] maps;
+		delete[] m;
 	}
 	*/
+
+	// Step 2: Rasterize the occlusion map
+	float* occlusion_map;
+	{
+		const tinyobj::mesh_t& mesh = shapes[mesh_index].mesh;
+
+		occlusion_map = new float[occlusion_map_width * occlusion_map_height];
+		memset(occlusion_map, 0, occlusion_map_width * occlusion_map_height * sizeof(float));
+
+		const uint32_t quality = 8;
+		const uint32_t sample_per_pixel = quality * 8;
+		const float far_distance = 15.f;
+		const float quadratic_attenuation = 1.0f;
+		const float linear_attenuation = 1.1f;
+		const bool smooth_interp_normal = true;
+
+		// Calculate occlusion for each pixel in the occlusion map
+		for (uint32_t i = 0; i < occlusion_map_height; ++i)
+		{
+			for (uint32_t j = 0; j < occlusion_map_width; ++j)
+			{
+				const uint32_t tris_index = indices_map[i * occlusion_map_width + j];
+
+				// Check if a triangle actually cover this pixel
+				if (tris_index == std::numeric_limits<uint32_t>::max())
+					continue;
+
+				// Calculate UV coordinates for the center of the current pixel
+				const glm::vec2 p_coord{ j / static_cast<float>(occlusion_map_width),
+										 i / static_cast<float>(occlusion_map_height) };
+
+				const uint32_t v0_index = mesh.indices[tris_index * 3 + 0];
+				const uint32_t v1_index = mesh.indices[tris_index * 3 + 1];
+				const uint32_t v2_index = mesh.indices[tris_index * 3 + 2];
+
+				// Get UV coordinates for the vertices of the triangle which includes this pixel
+				const glm::vec2 v0_coord{ mesh.texcoords[v0_index * 2 + 0],
+										  mesh.texcoords[v0_index * 2 + 1] };
+				const glm::vec2 v1_coord{ mesh.texcoords[v1_index * 2 + 0],
+										  mesh.texcoords[v1_index * 2 + 1] };
+				const glm::vec2 v2_coord{ mesh.texcoords[v2_index * 2 + 0] ,
+										  mesh.texcoords[v2_index * 2 + 1] };
+
+				// Use baricentric interpolation to obtain the position and normal of the given pixel when projected on the mesh
+				// http://answers.unity3d.com/questions/383804/calculate-uv-coordinates-of-3d-point-on-plane-of-m.html
+				const glm::vec2 p0_coord = v0_coord - p_coord;
+				const glm::vec2 p1_coord = v1_coord - p_coord;
+				const glm::vec2 p2_coord = v2_coord - p_coord;
+
+				const float area_tris = glm::length(glm::cross(glm::vec3(p0_coord - p1_coord, .0f), glm::vec3(p0_coord - p2_coord, .0f)));
+				const float area0 = glm::length(glm::cross(glm::vec3(p1_coord, .0f), glm::vec3(p2_coord, .0f))) / area_tris;
+				const float area1 = glm::length(glm::cross(glm::vec3(p2_coord, .0f), glm::vec3(p0_coord, .0f))) / area_tris;
+				const float area2 = glm::length(glm::cross(glm::vec3(p0_coord, .0f), glm::vec3(p1_coord, .0f))) / area_tris;
+
+				const glm::vec3 v0{ mesh.positions[v0_index * 3 + 0],
+									mesh.positions[v0_index * 3 + 1],
+									mesh.positions[v0_index * 3 + 2] };
+
+				const glm::vec3 v1{ mesh.positions[v1_index * 3 + 0],
+									mesh.positions[v1_index * 3 + 1],
+									mesh.positions[v1_index * 3 + 2] };
+
+				const glm::vec3 v2{ mesh.positions[v2_index * 3 + 0],
+									mesh.positions[v2_index * 3 + 1],
+									mesh.positions[v2_index * 3 + 2] };
+
+				const glm::vec3 p = v0 * area0 + v1 * area1 + v2 * area2;
+
+				const glm::vec3 n0{ mesh.normals[v0_index * 3 + 0],
+									mesh.normals[v0_index * 3 + 1],
+									mesh.normals[v0_index * 3 + 2] };
+
+				const glm::vec3 n1{ mesh.normals[v1_index * 3 + 0],
+									mesh.normals[v1_index * 3 + 1],
+									mesh.normals[v1_index * 3 + 2] };
+
+				const glm::vec3 n2{ mesh.normals[v2_index * 3 + 0],
+									mesh.normals[v2_index * 3 + 1],
+									mesh.normals[v2_index * 3 + 2] };
+
+				// Setting smooth_inter_normal to false will just take the mean value of the normals
+				glm::vec3 n;
+				if (smooth_interp_normal)
+				n = n0 * area0 + n1 * area1 + n2 * area2;
+				else
+				n = (n0 + n1 + n2) / 3.f;
+
+				// Generate the rays in groups of 8, to make use of Embree AVX2 capabilities
+				uint32_t num_hit = 0;
+				float occlusion = .0f;
+				for (uint32_t q = 0; q < quality; ++q)
+				{
+					RTCRay8 ray8{};
+					for (uint32_t ray_id = 0; ray_id < 8; ++ray_id)
+					{
+						ray8.orgx[ray_id] = p.x;
+						ray8.orgy[ray_id] = p.y;
+						ray8.orgz[ray_id] = p.z;
+
+						const glm::vec3 dir = cosine_weighted_hemisphere(n);
+						ray8.dirx[ray_id] = dir.x;
+						ray8.diry[ray_id] = dir.y;
+						ray8.dirz[ray_id] = dir.z;
+
+						ray8.tnear[ray_id] = .0001f;
+						ray8.tfar[ray_id] = far_distance;
+
+						ray8.geomID[ray_id] = RTC_INVALID_GEOMETRY_ID;
+					}
+
+					rtcIntersect8(&_ray_mask, embree_scene, ray8);
+
+					// Sum up occlusion for each hit accounting for attenuation
+					for (uint32_t ray_id = 0; ray_id < 8; ++ray_id)
+					{
+						if (ray8.geomID[ray_id] != RTC_INVALID_GEOMETRY_ID)
+						{
+							occlusion += 1.f - saturate(ray8.tfar[ray_id] / far_distance);
+							++num_hit;
+						}
+					}
+				}
+
+				if (num_hit > 0)
+				{
+					occlusion /= sample_per_pixel;
+					occlusion /= linear_attenuation;
+					occlusion = std::pow(occlusion, quadratic_attenuation);
+					occlusion_map[i * occlusion_map_width + j] = saturate(occlusion);
+				}
+			}
+		}
+	}
+
+	/*
+	// Step 3: Postprocess the occlusion map
+	{
+		for (uint32_t i = 0; i < occlusion_map_height; ++i)
+		{
+			for (uint32_t j = 0; j < occlusion_map_width; ++j)
+			{
+				uint32_t index = i * occlusion_map_width + j;
+				// TODO: Apply dithering
+			}
+		}
+	}
+	*/
+
+	// Step 4: Save the occlusion map to the disk
+	{
+		const elk::path out_path("maps/occlusion.tga");
+		uint8_t* temp_buffer = new uint8_t[occlusion_map_width * occlusion_map_height];
+
+		for (uint32_t i = 0; i < occlusion_map_height; ++i)
+		{
+			for (uint32_t j = 0; j < occlusion_map_width; ++j)
+			{
+				uint32_t index = i * occlusion_map_width + j;
+				temp_buffer[index] = static_cast<uint8_t>(255 * (1.f - occlusion_map[index]));
+			}
+		}
+
+		auto res = tga_write_mono(out_path.c_str(), temp_buffer, occlusion_map_width, occlusion_map_height);
+		if (res != TGA_NOERR)
+			std::cerr << "Error writing tga image!" << std::endl;
+
+		delete[] temp_buffer;
+	}
 
 	bool should_run = true;
 	while (should_run)
