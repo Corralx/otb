@@ -6,12 +6,13 @@
 
 #include "imgui/imgui.h"
 #include "imgui_impl_sdl_gl3.hpp"
-#pragma warning (push, 0)
 #include "glm/glm.hpp"
-#include "gli/gli.hpp"
-#pragma warning (pop)
 #include "GL/gl3w.h"
 #include "SDL2/SDL.h"
+#pragma warning (push, 0)
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+#pragma warning (pop)
 #include "tinyobjloader/tiny_obj_loader.h"
 #include "elektra/filesystem.hpp"
 
@@ -230,15 +231,15 @@ int main(int, char*[])
 	rtcDeviceSetMemoryMonitorFunction(embree_device, [](const ssize_t bytes, const bool)
 	{
 		if (bytes > 0)
-			std::cout << "EMBREE: Allocating " << bytes << " bytes of memory!" << std::endl;
+			std::cout << "Embree: Allocating " << bytes << " bytes of memory!" << std::endl;
 		else
-			std::cout << "EMBREE: Deallocating " << bytes << " bytes of memory!" << std::endl;
+			std::cout << "Embree: Deallocating " << bytes << " bytes of memory!" << std::endl;
 		return true;
 	});
 
 	rtcSetProgressMonitorFunction(embree_scene, [](void*, const double n)
 	{
-		std::cout << "EMBREE: Building data structure: " << (n * 100) << "%!" << std::endl;
+		std::cout << "Embree: Building data structure: " << (n * 100) << "%!" << std::endl;
 		return true;
 	}, nullptr);
 
@@ -595,6 +596,22 @@ int main(int, char*[])
 		}
 	}
 
+	// Step 3: Post process (just invert the value for now)
+	{
+		for (uint32_t i = 0; i < occlusion_map_height; ++i)
+		{
+			for (uint32_t j = 0; j < occlusion_map_width; ++j)
+			{
+				uint32_t index = i * occlusion_map_width + j;
+				float value = occlusion_map[index];
+
+				// TODO: Gaussian blur
+
+				occlusion_map[index] = saturate(1.f - value);
+			}
+		}
+	}
+
 	/* Dithering
 	const uint32_t dither_matrix[8][8] =
 	{
@@ -631,9 +648,15 @@ int main(int, char*[])
 	}
 	*/
 
-	/* Gaussian noise
-	// Step 3: Postprocess the occlusion map
+	// Step 4: Save the occlusion map to the disk
 	{
+		const elk::path out_path_tga("maps/occlusion.tga");
+		const elk::path out_path_hdr("maps/occlusion.hdr");
+		const elk::path out_path_png("maps/occlusion.png");
+
+		uint8_t* out_image = new uint8_t[occlusion_map_width * occlusion_map_height];
+		memset(out_image, 0, occlusion_map_width * occlusion_map_height);
+
 		for (uint32_t i = 0; i < occlusion_map_height; ++i)
 		{
 			for (uint32_t j = 0; j < occlusion_map_width; ++j)
@@ -641,16 +664,16 @@ int main(int, char*[])
 				uint32_t index = i * occlusion_map_width + j;
 				float value = occlusion_map[index];
 
-				occlusion_map[index] = (value < .0001f) ? value : saturate(value + static_cast<float>(normal_distribution()));
+				uint8_t quantized = static_cast<uint8_t>(value * 255);
+				out_image[index] = std::min(quantized, (uint8_t)255);
 			}
 		}
-	}
-	*/
+		
+		stbi_write_tga(out_path_tga.c_str(), occlusion_map_width, occlusion_map_height, 1, out_image);
+		stbi_write_hdr(out_path_hdr.c_str(), occlusion_map_width, occlusion_map_height, 1, occlusion_map);
+		stbi_write_png(out_path_png.c_str(), occlusion_map_width, occlusion_map_height, 1, out_image, 0);
 
-	// Step 4: Save the occlusion map to the disk
-	{
-		const elk::path out_path("maps/occlusion.dds");
-
+		delete[] out_image;
 	}
 
 	bool should_run = true;

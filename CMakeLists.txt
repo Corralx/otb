@@ -15,6 +15,7 @@ set (ELEKTRA_PATH ${CMAKE_SOURCE_DIR}/external/elektra)
 set (CPPFORMAT_PATH ${CMAKE_SOURCE_DIR}/external/cppformat)
 set (TINYOBJLOADER_PATH ${CMAKE_SOURCE_DIR}/external/tinyobjloader)
 set (IMGUI_PATH ${CMAKE_SOURCE_DIR}/external/imgui)
+set (LODEPNG_PATH ${CMAKE_SOURCE_DIR}/external/lodepng)
 
 set (
 	GL3W_INCLUDE_PATH
@@ -68,9 +69,15 @@ set (
 	${EMBREE_PATH}/lib
 )
 
+set (
+	LODEPNG_INCLUDE_PATH
+	${LODEPNG_PATH}
+)
+
 add_subdirectory (${GL3W_PATH})
 add_subdirectory (${ELEKTRA_PATH})
 add_subdirectory (${CPPFORMAT_PATH})
 add_subdirectory (${IMGUI_PATH})
 add_subdirectory (${TINYOBJLOADER_PATH})
+add_subdirectory (${LODEPNG_PATH})
 add_subdirectory (otb)
