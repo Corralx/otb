@@ -6,13 +6,11 @@ set (
 	SRC
 	main.cpp
 	imgui_impl_sdl_gl3.cpp
-	targa.c
 )
 
 set (
 	HEADER
 	imgui_impl_sdl_gl3.hpp
-	targa.h
 )
 
 set (

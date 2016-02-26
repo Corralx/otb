@@ -6,16 +6,14 @@
 
 #include "imgui/imgui.h"
 #include "imgui_impl_sdl_gl3.hpp"
+#pragma warning (push, 0)
 #include "glm/glm.hpp"
+#include "gli/gli.hpp"
+#pragma warning (pop)
 #include "GL/gl3w.h"
 #include "SDL2/SDL.h"
 #include "tinyobjloader/tiny_obj_loader.h"
 #include "elektra/filesystem.hpp"
-
-extern "C"
-{
-#include "targa.h"
-}
 
 #pragma warning (disable : 4324)
 #include "embree2/rtcore.h"
@@ -50,9 +48,9 @@ double random_float()
 {
 	static std::random_device rd;
 	static std::mt19937 gen(rd());
-	static std::uniform_real_distribution<> dis(.0f, 1.f);
+	static std::uniform_real_distribution<> dist(.0f, 1.f);
 
-	return dis(gen);
+	return dist(gen);
 }
 
 glm::vec3 cosine_weighted_hemisphere(glm::vec3 n)
@@ -81,6 +79,15 @@ glm::vec3 cosine_weighted_hemisphere(glm::vec3 n)
 
 	glm::vec3 direction = xs * x + ys * n + zs * z;
 	return glm::normalize(direction);
+}
+
+double normal_distribution()
+{
+	static std::random_device rd;
+	static std::mt19937 gen(rd());
+	static std::uniform_real_distribution<> dist(.0f, .07f);
+
+	return dist(gen);
 }
 
 template<typename T>
@@ -145,6 +152,7 @@ struct span_t
 
 int main(int, char*[])
 {
+	// Setting the CPU register flags for Embree
 	_MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
 	_MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
 
@@ -454,31 +462,6 @@ int main(int, char*[])
 		delete[] index_map;
 	}
 	
-	/* Debug visualize the covered pixels
-	{
-		uint8_t* m = new uint8_t[occlusion_map_width * occlusion_map_height];
-		memset(m, 255, occlusion_map_width * occlusion_map_height);
-		for (uint32_t i = 0; i < occlusion_map_height; ++i)
-		{
-			for (uint32_t j = 0; j < occlusion_map_width; ++j)
-			{
-				const uint32_t tris_index = indices_map[i * occlusion_map_width + j];
-
-				if (tris_index == std::numeric_limits<uint32_t>::max())
-					continue;
-
-				m[i * occlusion_map_width + j] = 0;
-			}
-		}
-
-		auto res = tga_write_mono("maps/debug.tga", m, occlusion_map_width, occlusion_map_height);
-		if (res != TGA_NOERR)
-			std::cerr << "Error writing tga image!" << std::endl;
-
-		delete[] m;
-	}
-	*/
-
 	// Step 2: Rasterize the occlusion map
 	float* occlusion_map;
 	{
@@ -612,7 +595,19 @@ int main(int, char*[])
 		}
 	}
 
-	/*
+	/* Dithering
+	const uint32_t dither_matrix[8][8] =
+	{
+		{ 0, 32, 8, 40, 2, 34, 10, 42 },
+		{ 48, 16, 56, 24, 50, 18, 58, 26 },
+		{ 12, 44, 4, 36, 14, 46, 6, 38 },
+		{ 60, 28, 52, 20, 62, 30, 54, 22 },
+		{ 3, 35, 11, 43, 1, 33, 9, 41 },
+		{ 51, 19, 59, 27, 49, 17, 57, 25 },
+		{ 15, 47, 7, 39, 13, 45, 5, 37 },
+		{ 63, 31, 55, 23, 61, 29, 53, 21 }
+	};
+
 	// Step 3: Postprocess the occlusion map
 	{
 		for (uint32_t i = 0; i < occlusion_map_height; ++i)
@@ -620,7 +615,33 @@ int main(int, char*[])
 			for (uint32_t j = 0; j < occlusion_map_width; ++j)
 			{
 				uint32_t index = i * occlusion_map_width + j;
-				// TODO: Apply dithering
+				
+				uint32_t x = j % 8;
+				uint32_t y = i % 8;
+
+				float limit = static_cast<float>(dither_matrix[x][y] + 1) / 64.f;
+
+				float value = occlusion_map[index];
+				if (value < limit)
+					occlusion_map[index] = saturate(value + (limit / 16.f));
+				else
+					occlusion_map[index] = saturate(value - (limit / 16.f));
+			}
+		}
+	}
+	*/
+
+	/* Gaussian noise
+	// Step 3: Postprocess the occlusion map
+	{
+		for (uint32_t i = 0; i < occlusion_map_height; ++i)
+		{
+			for (uint32_t j = 0; j < occlusion_map_width; ++j)
+			{
+				uint32_t index = i * occlusion_map_width + j;
+				float value = occlusion_map[index];
+
+				occlusion_map[index] = (value < .0001f) ? value : saturate(value + static_cast<float>(normal_distribution()));
 			}
 		}
 	}
@@ -628,23 +649,8 @@ int main(int, char*[])
 
 	// Step 4: Save the occlusion map to the disk
 	{
-		const elk::path out_path("maps/occlusion.tga");
-		uint8_t* temp_buffer = new uint8_t[occlusion_map_width * occlusion_map_height];
+		const elk::path out_path("maps/occlusion.dds");
 
-		for (uint32_t i = 0; i < occlusion_map_height; ++i)
-		{
-			for (uint32_t j = 0; j < occlusion_map_width; ++j)
-			{
-				uint32_t index = i * occlusion_map_width + j;
-				temp_buffer[index] = static_cast<uint8_t>(255 * (1.f - occlusion_map[index]));
-			}
-		}
-
-		auto res = tga_write_mono(out_path.c_str(), temp_buffer, occlusion_map_width, occlusion_map_height);
-		if (res != TGA_NOERR)
-			std::cerr << "Error writing tga image!" << std::endl;
-
-		delete[] temp_buffer;
 	}
 
 	bool should_run = true;
