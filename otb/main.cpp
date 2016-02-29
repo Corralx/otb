@@ -7,6 +7,7 @@
 #include <vector>
 #include <queue>
 #include <mutex>
+#include <array>
 
 #include "imgui/imgui.h"
 #include "imgui_impl_sdl_gl3.hpp"
@@ -22,9 +23,10 @@
 #define RMT_USE_OPENGL 1
 #include "remotery/remotery.h"
 
-#pragma warning (disable : 4324)
+#pragma warning (push, 0)
 #include "embree2/rtcore.h"
 #include "embree2/rtcore_ray.h"
+#pragma warning (pop)
 #include <xmmintrin.h>
 #include <pmmintrin.h>
 
@@ -103,6 +105,12 @@ T saturate(T value)
 	return std::min(1.f, std::max(.0f, value));
 }
 
+template<typename T>
+T clamp(T value, T min, T max)
+{
+	return std::min(max, std::max(min, value));
+}
+
 bool same_side(const glm::vec2& p1, const glm::vec2& p2, const glm::vec2& a, const glm::vec2& b)
 {
 	auto b_minus_a = glm::vec3(b.x - a.x, b.y - a.y, .0f);
@@ -166,6 +174,34 @@ struct tile_work
 	bool valid;
 };
 
+template<uint32_t kernel_size>
+std::array<float, kernel_size> generate_gaussian_kernel_1d(float sigma)
+{
+	auto gauss_generator = [](float x, float sigma)
+	{
+		float c = 2.f * sigma * sigma;
+		return std::exp(-x * x / c) / std::sqrt(c * (float)M_PI);
+	};
+
+	const int32_t kernel_half_size = static_cast<int32_t>(kernel_size) / 2;
+	std::array<float, kernel_size> kernel;
+	float weight_sum = 0;
+
+	// kernel generation
+	for (int32_t i = 0; i < kernel_size; ++i)
+	{
+		float value = gauss_generator(static_cast<float>(i - kernel_half_size), sigma);
+		kernel[i] = value;
+		weight_sum += value;
+	}
+
+	// Normalization
+	for (int32_t i = 0; i < kernel_size; ++i)
+		kernel[i] /= weight_sum;
+
+	return std::move(kernel);
+}
+
 int main(int, char*[])
 {
 	// Setting the CPU register flags for Embree
@@ -188,7 +224,7 @@ int main(int, char*[])
 	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 	SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
 
 	SDL_DisplayMode current;
 	SDL_GetCurrentDisplayMode(0, &current);
@@ -309,7 +345,7 @@ int main(int, char*[])
 		std::cout << "Embree scene initialized correctly!" << std::endl;
 
 	const uint32_t mesh_index = 1;
-	const uint32_t occlusion_map_width = 2048;
+	const uint32_t occlusion_map_width = 512;
 	const uint32_t occlusion_map_height = occlusion_map_width;
 
 	// Step 1: Find the triangle index covering each pixel in the occlusion map
@@ -317,7 +353,7 @@ int main(int, char*[])
 	{
 		const uint8_t ssaa_scale = 2;
 		const uint32_t width = occlusion_map_width * ssaa_scale;
-		const uint32_t height = width;
+		const uint32_t height = occlusion_map_height * ssaa_scale;
 
 		const tinyobj::mesh_t& mesh = shapes[mesh_index].mesh;
 		const size_t triangle_num = mesh.indices.size() / 3;
@@ -497,7 +533,7 @@ int main(int, char*[])
 		occlusion_map = new float[occlusion_map_width * occlusion_map_height];
 		memset(occlusion_map, 0, occlusion_map_width * occlusion_map_height * sizeof(float));
 
-		const uint32_t quality = 16;
+		const uint32_t quality = 2;
 		const uint32_t sample_per_pixel = quality * 8;
 		const float far_distance = 15.f;
 		const float quadratic_attenuation = 1.0f;
@@ -512,6 +548,8 @@ int main(int, char*[])
 		std::vector<std::thread> workers;
 		std::queue<tile_work> work_queue;
 		std::mutex work_mutex;
+		const uint32_t expected_num_workers = 8;
+		const uint32_t num_workers = std::min(std::thread::hardware_concurrency(), expected_num_workers);
 
 		auto get_work = [&work_queue, &work_mutex]() -> tile_work
 		{
@@ -657,158 +695,101 @@ int main(int, char*[])
 			for (uint32_t j = 0; j < num_tile_width; ++j)
 				work_queue.emplace(j * tile_width, i * tile_height);
 
-		for (uint32_t w = 0; w < std::thread::hardware_concurrency(); ++w)
+		for (uint32_t w = 0; w < num_workers; ++w)
 			workers.push_back(std::thread(do_work));
 
 		for (auto& w : workers)
 			w.join();
 	}
 
-	/*
-	// Step 2: Rasterize the occlusion map
-	float* occlusion_map;
+	// Step 3: Post process
 	{
-		const tinyobj::mesh_t& mesh = shapes[mesh_index].mesh;
+		/* Dithering
+		const uint32_t dither_matrix[8][8] =
+		{
+			{ 0, 32, 8, 40, 2, 34, 10, 42 },
+			{ 48, 16, 56, 24, 50, 18, 58, 26 },
+			{ 12, 44, 4, 36, 14, 46, 6, 38 },
+			{ 60, 28, 52, 20, 62, 30, 54, 22 },
+			{ 3, 35, 11, 43, 1, 33, 9, 41 },
+			{ 51, 19, 59, 27, 49, 17, 57, 25 },
+			{ 15, 47, 7, 39, 13, 45, 5, 37 },
+			{ 63, 31, 55, 23, 61, 29, 53, 21 }
+		};
 
-		occlusion_map = new float[occlusion_map_width * occlusion_map_height];
-		memset(occlusion_map, 0, occlusion_map_width * occlusion_map_height * sizeof(float));
-
-		const uint32_t quality = 8;
-		const uint32_t sample_per_pixel = quality * 8;
-		const float far_distance = 15.f;
-		const float quadratic_attenuation = 1.0f;
-		const float linear_attenuation = 1.1f;
-		const bool smooth_interp_normal = true;
-
-		// Calculate occlusion for each pixel in the occlusion map
 		for (uint32_t i = 0; i < occlusion_map_height; ++i)
 		{
 			for (uint32_t j = 0; j < occlusion_map_width; ++j)
 			{
-				const uint32_t tris_index = indices_map[i * occlusion_map_width + j];
+				uint32_t index = i * occlusion_map_width + j;
 
-				// Check if a triangle actually cover this pixel
-				if (tris_index == std::numeric_limits<uint32_t>::max())
-					continue;
+				uint32_t x = j % 8;
+				uint32_t y = i % 8;
 
-				// Calculate UV coordinates for the center of the current pixel
-				const glm::vec2 p_coord{ j / static_cast<float>(occlusion_map_width),
-										 i / static_cast<float>(occlusion_map_height) };
+				float limit = static_cast<float>(dither_matrix[x][y] + 1) / 64.f;
 
-				const uint32_t v0_index = mesh.indices[tris_index * 3 + 0];
-				const uint32_t v1_index = mesh.indices[tris_index * 3 + 1];
-				const uint32_t v2_index = mesh.indices[tris_index * 3 + 2];
-
-				// Get UV coordinates for the vertices of the triangle which includes this pixel
-				const glm::vec2 v0_coord{ mesh.texcoords[v0_index * 2 + 0],
-										  mesh.texcoords[v0_index * 2 + 1] };
-				const glm::vec2 v1_coord{ mesh.texcoords[v1_index * 2 + 0],
-										  mesh.texcoords[v1_index * 2 + 1] };
-				const glm::vec2 v2_coord{ mesh.texcoords[v2_index * 2 + 0] ,
-										  mesh.texcoords[v2_index * 2 + 1] };
-
-				// Use baricentric interpolation to obtain the position and normal of the given pixel when projected on the mesh
-				// http://answers.unity3d.com/questions/383804/calculate-uv-coordinates-of-3d-point-on-plane-of-m.html
-				const glm::vec2 p0_coord = v0_coord - p_coord;
-				const glm::vec2 p1_coord = v1_coord - p_coord;
-				const glm::vec2 p2_coord = v2_coord - p_coord;
-
-				const float area_tris = glm::length(glm::cross(glm::vec3(p0_coord - p1_coord, .0f), glm::vec3(p0_coord - p2_coord, .0f)));
-				const float area0 = glm::length(glm::cross(glm::vec3(p1_coord, .0f), glm::vec3(p2_coord, .0f))) / area_tris;
-				const float area1 = glm::length(glm::cross(glm::vec3(p2_coord, .0f), glm::vec3(p0_coord, .0f))) / area_tris;
-				const float area2 = glm::length(glm::cross(glm::vec3(p0_coord, .0f), glm::vec3(p1_coord, .0f))) / area_tris;
-
-				const glm::vec3 v0{ mesh.positions[v0_index * 3 + 0],
-									mesh.positions[v0_index * 3 + 1],
-									mesh.positions[v0_index * 3 + 2] };
-
-				const glm::vec3 v1{ mesh.positions[v1_index * 3 + 0],
-									mesh.positions[v1_index * 3 + 1],
-									mesh.positions[v1_index * 3 + 2] };
-
-				const glm::vec3 v2{ mesh.positions[v2_index * 3 + 0],
-									mesh.positions[v2_index * 3 + 1],
-									mesh.positions[v2_index * 3 + 2] };
-
-				const glm::vec3 p = v0 * area0 + v1 * area1 + v2 * area2;
-
-				const glm::vec3 n0{ mesh.normals[v0_index * 3 + 0],
-									mesh.normals[v0_index * 3 + 1],
-									mesh.normals[v0_index * 3 + 2] };
-
-				const glm::vec3 n1{ mesh.normals[v1_index * 3 + 0],
-									mesh.normals[v1_index * 3 + 1],
-									mesh.normals[v1_index * 3 + 2] };
-
-				const glm::vec3 n2{ mesh.normals[v2_index * 3 + 0],
-									mesh.normals[v2_index * 3 + 1],
-									mesh.normals[v2_index * 3 + 2] };
-
-				// Setting smooth_inter_normal to false will just take the mean value of the normals
-				glm::vec3 n;
-				if (smooth_interp_normal)
-				n = n0 * area0 + n1 * area1 + n2 * area2;
+				float value = occlusion_map[index];
+				if (value < limit)
+					occlusion_map[index] = saturate(value + (limit / 16.f));
 				else
-				n = (n0 + n1 + n2) / 3.f;
+					occlusion_map[index] = saturate(value - (limit / 16.f));
+			}
+		}
+		*/
 
-				// Generate the rays in groups of 8, to make use of Embree AVX2 capabilities
-				uint32_t num_hit = 0;
-				float occlusion = .0f;
-				for (uint32_t q = 0; q < quality; ++q)
+		// Gaussian blur
+		const uint32_t kernel_size = 3;
+		const std::array<float, kernel_size> gaussian_kernel = generate_gaussian_kernel_1d<kernel_size>(1.f);
+		const uint32_t num_blur_pass = 3;
+
+		const int32_t kernel_half_width = static_cast<int32_t>(kernel_size) / 2;
+
+		for (uint32_t pass = 0; pass < num_blur_pass; ++pass)
+		{
+			// First pass: blur horizontally
+			for (uint32_t i = 0; i < occlusion_map_height; ++i)
+			{
+				for (uint32_t j = 0; j < occlusion_map_width; ++j)
 				{
-					RTCRay8 ray8{};
-					for (uint32_t ray_id = 0; ray_id < 8; ++ray_id)
+					float sum = .0f;
+					for (int32_t k = -kernel_half_width; k <= kernel_half_width; ++k)
 					{
-						ray8.orgx[ray_id] = p.x;
-						ray8.orgy[ray_id] = p.y;
-						ray8.orgz[ray_id] = p.z;
-
-						const glm::vec3 dir = cosine_weighted_hemisphere(n);
-						ray8.dirx[ray_id] = dir.x;
-						ray8.diry[ray_id] = dir.y;
-						ray8.dirz[ray_id] = dir.z;
-
-						ray8.tnear[ray_id] = .0001f;
-						ray8.tfar[ray_id] = far_distance;
-
-						ray8.geomID[ray_id] = RTC_INVALID_GEOMETRY_ID;
+						const uint32_t sample_j = clamp(j + k, (uint32_t)0, occlusion_map_width - 1);
+						const uint32_t index = i * occlusion_map_width + sample_j;
+						sum += occlusion_map[index] * gaussian_kernel[k + kernel_half_width];
 					}
 
-					rtcIntersect8(&_ray_mask, embree_scene, ray8);
-
-					// Sum up occlusion for each hit accounting for attenuation
-					for (uint32_t ray_id = 0; ray_id < 8; ++ray_id)
-					{
-						if (ray8.geomID[ray_id] != RTC_INVALID_GEOMETRY_ID)
-						{
-							occlusion += 1.f - saturate(ray8.tfar[ray_id] / far_distance);
-							++num_hit;
-						}
-					}
+					const uint32_t index = i * occlusion_map_width + j;
+					occlusion_map[index] = sum;
 				}
+			}
 
-				if (num_hit > 0)
+			// Second pass: blur vertically
+			for (uint32_t j = 0; j < occlusion_map_width; ++j)
+			{
+				for (uint32_t i = 0; i < occlusion_map_height; ++i)
 				{
-					occlusion /= sample_per_pixel;
-					occlusion /= linear_attenuation;
-					occlusion = std::pow(occlusion, quadratic_attenuation);
-					occlusion_map[i * occlusion_map_width + j] = saturate(occlusion);
+					float sum = .0f;
+					for (int32_t k = -kernel_half_width; k <= kernel_half_width; ++k)
+					{
+						const uint32_t sample_i = clamp(i + k, (uint32_t)0, occlusion_map_height - 1);
+						const uint32_t index = sample_i * occlusion_map_width + j;
+						sum += occlusion_map[index] * gaussian_kernel[k + kernel_half_width];
+					}
+
+					const uint32_t index = i * occlusion_map_width + j;
+					occlusion_map[index] = sum;
 				}
 			}
 		}
-	}
-	*/
 
-	// Step 3: Post process (just invert the value for now)
-	{
+		// Invert the values
 		for (uint32_t i = 0; i < occlusion_map_height; ++i)
 		{
 			for (uint32_t j = 0; j < occlusion_map_width; ++j)
 			{
 				uint32_t index = i * occlusion_map_width + j;
 				float value = occlusion_map[index];
-
-				// TODO: Gaussian blur
 
 				occlusion_map[index] = saturate(1.f - value);
 			}
@@ -875,9 +856,9 @@ int main(int, char*[])
 			}
 		}
 		
-		stbi_write_tga(out_path_tga.c_str(), occlusion_map_width, occlusion_map_height, 1, out_image);
+		//stbi_write_tga(out_path_tga.c_str(), occlusion_map_width, occlusion_map_height, 1, out_image);
 		stbi_write_hdr(out_path_hdr.c_str(), occlusion_map_width, occlusion_map_height, 1, occlusion_map);
-		stbi_write_png(out_path_png.c_str(), occlusion_map_width, occlusion_map_height, 1, out_image, 0);
+		//stbi_write_png(out_path_png.c_str(), occlusion_map_width, occlusion_map_height, 1, out_image, 0);
 
 		delete[] out_image;
 	}
