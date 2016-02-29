@@ -195,11 +195,12 @@ int main(int, char*[])
 	SDL_Window *window = SDL_CreateWindow("Occlusion and Translucency Baker", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
 										  APP_WIDTH, APP_HEIGHT, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
 	SDL_GLContext glcontext = SDL_GL_CreateContext(window);
+
 	gl3wInit();
 
 	ImGui_ImplSdlGL3_Init(window);
 
-	glViewport(0, 0, (int)ImGui::GetIO().DisplaySize.x, (int)ImGui::GetIO().DisplaySize.y);
+	glViewport(0, 0, APP_WIDTH, APP_HEIGHT);
 	glClearColor(1.f, .0f, .0f, 1.f);
 	SDL_GL_SetSwapInterval(0);
 
@@ -212,7 +213,7 @@ int main(int, char*[])
 
 	Remotery* rmt;
 	rmt_CreateGlobalInstance(&rmt);
-	//rmt_BindOpenGL();
+	rmt_BindOpenGL();
 
 	std::vector<tinyobj::shape_t> shapes;
 	{
@@ -306,9 +307,9 @@ int main(int, char*[])
 		std::cerr << "Error loading Embree scene!" << std::endl;
 	else
 		std::cout << "Embree scene initialized correctly!" << std::endl;
-	
-	const uint32_t mesh_index = 0;
-	const uint32_t occlusion_map_width = 1024;
+
+	const uint32_t mesh_index = 1;
+	const uint32_t occlusion_map_width = 2048;
 	const uint32_t occlusion_map_height = occlusion_map_width;
 
 	// Step 1: Find the triangle index covering each pixel in the occlusion map
@@ -496,7 +497,7 @@ int main(int, char*[])
 		occlusion_map = new float[occlusion_map_width * occlusion_map_height];
 		memset(occlusion_map, 0, occlusion_map_width * occlusion_map_height * sizeof(float));
 
-		const uint32_t quality = 32;
+		const uint32_t quality = 16;
 		const uint32_t sample_per_pixel = quality * 8;
 		const float far_distance = 15.f;
 		const float quadratic_attenuation = 1.0f;
@@ -852,9 +853,12 @@ int main(int, char*[])
 
 	// Step 4: Save the occlusion map to the disk
 	{
-		const elk::path out_path_tga("maps/occlusion.tga");
-		const elk::path out_path_hdr("maps/occlusion.hdr");
-		const elk::path out_path_png("maps/occlusion.png");
+		elk::path base_path("maps");
+		base_path /= "occlusion_";
+		base_path += shapes[mesh_index].name;
+		const elk::path out_path_tga(elk::path(base_path).concat(".tga"));
+		const elk::path out_path_hdr(elk::path(base_path).concat(".hdr"));
+		const elk::path out_path_png(elk::path(base_path).concat(".png"));
 
 		uint8_t* out_image = new uint8_t[occlusion_map_width * occlusion_map_height];
 		memset(out_image, 0, occlusion_map_width * occlusion_map_height);
@@ -897,7 +901,7 @@ int main(int, char*[])
 					break;
 			}
 		}
-
+		
 		ImGui_ImplSdlGL3_NewFrame();
 
 		{
@@ -914,7 +918,7 @@ int main(int, char*[])
 		SDL_GL_SwapWindow(window);
 	}
 
-	//rmt_UnbindOpenGL();
+	rmt_UnbindOpenGL();
 	rmt_DestroyGlobalInstance(rmt);
 
 	ImGui_ImplSdlGL3_Shutdown();
