@@ -49,7 +49,7 @@ include_directories (${TINYOBJLOADER_INCLUDE_PATH})
 include_directories (${IMGUI_INCLUDE_PATH})
 include_directories (${SDL2_INCLUDE_PATH})
 include_directories (${EMBREE_INCLUDE_PATH})
-include_directories (${LODEPNG_INCLUDE_PATH})
+include_directories (${REMOTERY_INCLUDE_PATH})
 
 add_executable (
 	otb
@@ -72,7 +72,7 @@ target_link_libraries (
 	cppformat
 	tinyobjloader
 	imgui
-	lodepng
+	remotery
 	${OPENGL_LIB}
 	${SDL2_LIB_PATH}/SDL2.lib
 	${SDL2_LIB_PATH}/SDL2main.lib

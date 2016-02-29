@@ -3,3 +3,6 @@ Corralx:
 * Test the supersampling with different scales
 * Use std::round insted of casting with +.5f
 * Implement Gaussian blur to compensate for lower number of sample
+* Multithread the raycasting
+* Try to transform every double loop into a single loop (could make performance better)
+* Move stb inside an external folder
