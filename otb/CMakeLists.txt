@@ -15,6 +15,7 @@ set (
 	utils.hpp
 	mesh.hpp
 	embree.hpp
+	image.hpp
 	imgui_impl_sdl_gl3.hpp
 )
 

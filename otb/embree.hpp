@@ -8,8 +8,8 @@
 #include "glm/glm.hpp"
 
 class mesh_t;
-class __RTCDevice;
-class __RTCScene;
+struct __RTCDevice;
+struct __RTCScene;
 
 namespace embree
 {
@@ -31,7 +31,7 @@ struct triangle
 
 using mesh_id = uint32_t;
 
-const mesh_id NO_HIT_RESULT = std::numeric_limits<mesh_id>::max();
+const mesh_id NO_HIT_ID = std::numeric_limits<mesh_id>::max();
 
 struct intersect_result
 {

@@ -112,7 +112,7 @@ intersect_result context::intersect(const ray& r, float max_distance, float min_
 		ray8.tnear[ray_id] = min_distance;
 		ray8.tfar[ray_id] = max_distance;
 
-		ray8.geomID[ray_id] = NO_HIT_RESULT;
+		ray8.geomID[ray_id] = NO_HIT_ID;
 	}
 
 	rtcIntersect8(&mask, _scene, ray8);
@@ -143,14 +143,14 @@ occluded_result context::occluded(const ray& r, float max_distance, float min_di
 		ray8.tnear[ray_id] = min_distance;
 		ray8.tfar[ray_id] = max_distance;
 
-		ray8.geomID[ray_id] = NO_HIT_RESULT;
+		ray8.geomID[ray_id] = NO_HIT_ID;
 	}
 
 	rtcOccluded8(&mask, _scene, ray8);
 
 	occluded_result res{};
 	for (uint32_t ray_id = 0; ray_id < 8; ++ray_id)
-		res[ray_id] = (ray8.geomID[ray_id] != NO_HIT_RESULT) ? true : false;
+		res[ray_id] = (ray8.geomID[ray_id] != NO_HIT_ID) ? true : false;
 
 	return std::move(res);
 }

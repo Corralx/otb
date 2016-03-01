@@ -1,5 +1,6 @@
 #include <iostream>
 #include <cstdint>
+#include <string>
 #include <random>
 #include <algorithm>
 #include <limits>
@@ -15,16 +16,15 @@
 #include "glm/glm.hpp"
 #include "GL/gl3w.h"
 #include "SDL2/SDL.h"
-#pragma warning (push, 0)
-#define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb/stb_image_write.h"
-#pragma warning (pop)
 #include "tinyobjloader/tiny_obj_loader.h"
 #include "elektra/filesystem.hpp"
 #define RMT_USE_OPENGL 1
 #include "remotery/remotery.h"
 
 #include "utils.hpp"
+#include "image.hpp"
+#include "embree.hpp"
 
 #include "embree2/rtcore.h"
 #pragma warning (push, 0)
@@ -35,6 +35,7 @@
 
 static constexpr uint32_t APP_WIDTH = 1280;
 static constexpr uint32_t APP_HEIGHT = 720;
+static constexpr char* APP_NAME = "Occlusion and Translucency Baker";
 
 struct embree_vertex
 {
@@ -55,84 +56,6 @@ struct RTCORE_ALIGN(16) ray_mask
 {
 	uint32_t _[8];
 };
-
-double random_double()
-{
-	static std::random_device rd;
-	static std::mt19937 gen(rd());
-	static std::uniform_real_distribution<> dist(.0f, 1.f);
-
-	return dist(gen);
-}
-
-glm::vec3 cosine_weighted_hemisphere(glm::vec3 n)
-{
-	double xi1 = random_double();
-	double xi2 = random_double();
-
-	double  theta = acos(sqrt(1.0 - xi1));
-	double  phi = 2.0 * M_PI * xi2;
-
-	float xs = static_cast<float>(sin(theta) * cos(phi));
-	float ys = static_cast<float>(cos(theta));
-	float zs = static_cast<float>(sin(theta) * sin(phi));
-
-	glm::vec3 h = n;
-	if (abs(h.x) <= abs(h.y) && abs(h.x) <= abs(h.z))
-		h.x = 1.0;
-	else if (abs(h.y) <= abs(h.x) && abs(h.y) <= abs(h.z))
-		h.y = 1.0;
-	else
-		h.z = 1.0;
-
-
-	glm::vec3 x = glm::normalize(glm::cross(h, n));
-	glm::vec3 z = glm::normalize(glm::cross(x, n));
-
-	glm::vec3 direction = xs * x + ys * n + zs * z;
-	return glm::normalize(direction);
-}
-
-double normal_distribution()
-{
-	static std::random_device rd;
-	static std::mt19937 gen(rd());
-	static std::uniform_real_distribution<> dist(.0f, .07f);
-
-	return dist(gen);
-}
-
-template<typename T>
-T saturate(T value)
-{
-	return std::min(1.f, std::max(.0f, value));
-}
-
-template<typename T>
-T clamp(T value, T min, T max)
-{
-	return std::min(max, std::max(min, value));
-}
-
-bool same_side(const glm::vec2& p1, const glm::vec2& p2, const glm::vec2& a, const glm::vec2& b)
-{
-	auto b_minus_a = glm::vec3(b.x - a.x, b.y - a.y, .0f);
-	auto p1_minus_a = glm::vec3(p1.x - a.x, p1.y - a.y, .0f);
-	auto p2_minus_a = glm::vec3(p2.x - a.x, p2.y - a.y, .0f);
-
-	auto cp1 = glm::cross(b_minus_a, p1_minus_a);
-	auto cp2 = glm::cross(b_minus_a, p2_minus_a);
-
-	if (glm::dot(cp1, cp2) >= 0)
-		return true;
-	else
-		return false;
-}
-
-bool point_in_tris(const glm::vec2& p, const glm::vec2& a, const glm::vec2& b, const glm::vec2& c)
-{
-	return same_side(p, a, b, c) && same_side(p, b, a, c) && same_side(p, c, a, b);
-}
 
 struct edge_t
 {
@@ -177,34 +100,8 @@ struct tile_work
 	bool valid;
 };
 
-template<uint32_t kernel_size>
-std::array<float, kernel_size> generate_gaussian_kernel_1d(float sigma)
-{
-	auto gauss_generator = [](float x, float sigma)
-	{
-		float c = 2.f * sigma * sigma;
-		return std::exp(-x * x / c) / std::sqrt(c * (float)M_PI);
-	};
-
-	const int32_t kernel_half_size = static_cast<int32_t>(kernel_size) / 2;
-	std::array<float, kernel_size> kernel;
-	float weight_sum = 0;
-
-	// kernel generation
-	for (int32_t i = 0; i < kernel_size; ++i)
-	{
-		float value = gauss_generator(static_cast<float>(i - kernel_half_size), sigma);
-		kernel[i] = value;
-		weight_sum += value;
-	}
-
-	// Normalization
-	for (int32_t i = 0; i < kernel_size; ++i)
-		kernel[i] /= weight_sum;
-
-	return std::move(kernel);
-}
-
+// TODO(Corralx): Set up OpenGL in debug mode when needed
+// TODO(Corralx): Set up some way to disable/enable remotery when needed
 int main(int, char*[])
 {
 	// Setting the CPU register flags for Embree
@@ -231,7 +128,7 @@ int main(int, char*[])
 
 	SDL_DisplayMode current;
 	SDL_GetCurrentDisplayMode(0, &current);
-	SDL_Window *window = SDL_CreateWindow("Occlusion and Translucency Baker", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+	SDL_Window *window = SDL_CreateWindow(APP_NAME, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
 										  APP_WIDTH, APP_HEIGHT, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
 	SDL_GLContext glcontext = SDL_GL_CreateContext(window);
 
@@ -347,8 +244,8 @@ int main(int, char*[])
 	else
 		std::cout << "Embree scene initialized correctly!" << std::endl;
 
-	const uint32_t mesh_index = 1;
-	const uint32_t occlusion_map_width = 512;
+	const uint32_t mesh_index = 0;
+	const uint32_t occlusion_map_width = 1024;
 	const uint32_t occlusion_map_height = occlusion_map_width;
 
 	// Step 1: Find the triangle index covering each pixel in the occlusion map
@@ -536,7 +433,7 @@ int main(int, char*[])
 		occlusion_map = new float[occlusion_map_width * occlusion_map_height];
 		memset(occlusion_map, 0, occlusion_map_width * occlusion_map_height * sizeof(float));
 
-		const uint32_t quality = 2;
+		const uint32_t quality = 8;
 		const uint32_t sample_per_pixel = quality * 8;
 		const float far_distance = 15.f;
 		const float quadratic_attenuation = 1.0f;
@@ -658,7 +555,7 @@ int main(int, char*[])
 								ray8.orgy[ray_id] = p.y;
 								ray8.orgz[ray_id] = p.z;
 
-								const glm::vec3 dir = cosine_weighted_hemisphere(n);
+								const glm::vec3 dir = cosine_weighted_hemisphere_sample(n);
 								ray8.dirx[ray_id] = dir.x;
 								ray8.diry[ray_id] = dir.y;
 								ray8.dirz[ray_id] = dir.z;
@@ -840,6 +737,9 @@ int main(int, char*[])
 	bool should_run = true;
 	while (should_run)
 	{
+		rmt_BeginCPUSample(RenderLoop);
+
+		rmt_BeginCPUSample(EventManagement);
 		SDL_Event event;
 		while (SDL_PollEvent(&event))
 		{
@@ -856,20 +756,29 @@ int main(int, char*[])
 					break;
 			}
 		}
-		
-		ImGui_ImplSdlGL3_NewFrame();
+		rmt_EndCPUSample();
 
+		// TODO: Update
+
+		rmt_BeginCPUSample(BufferClear);
+		glClear(GL_COLOR_BUFFER_BIT);
+		rmt_EndCPUSample();
+
+		// TODO: Render
+
+		rmt_BeginCPUSample(ImGuiRender);
+		ImGui_ImplSdlGL3_NewFrame();
 		{
 			static float f = 0.0f;
 			ImGui::Text("Hello, world!");
 			ImGui::SliderFloat("float", &f, 0.0f, 1.0f);
 			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 		}
-
-		// Update
-		glClear(GL_COLOR_BUFFER_BIT);
 		ImGui::Render();
-		// Render
+		rmt_EndCPUSample();
+
+		rmt_EndCPUSample();
+
 		SDL_GL_SwapWindow(window);
 	}
 

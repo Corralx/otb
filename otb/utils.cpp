@@ -3,6 +3,15 @@
 #include "tinyobjloader/tiny_obj_loader.h"
 #include "elektra/filesystem.hpp"
 
+#pragma warning (push, 0)
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb/stb_image_write.h"
+#pragma warning (pop)
+
+#include <random>
+
+static constexpr double PI = 3.14159265358979323846264338327950288;
+
 std::vector<mesh_t> load_mesh(const elk::path& path)
 {
 	if (path.empty() || !elk::exists(path) || path.extension() != ".obj")
@@ -46,4 +55,87 @@ std::vector<mesh_t> load_mesh(const elk::path& path)
 	}
 
 	return std::move(meshes);
+}
+
+template<>
+bool write_image(const elk::path& path, const image<image_format::U8>& image, image_extension ext)
+{
+	switch (ext)
+	{
+		case image_extension::BMP:
+			return stbi_write_bmp(path.c_str(), image.width(), image.height(), 1, image.raw()) != 0;
+
+		case image_extension::PNG:
+			return stbi_write_png(path.c_str(), image.width(), image.height(), 1, image.raw(), 0) != 0;
+
+		case image_extension::TGA:
+			return stbi_write_tga(path.c_str(), image.width(), image.height(), 1, image.raw()) != 0;
+
+		default:
+			assert(false);
+	}
+
+	return false;
+}
+
+bool write_image(const elk::path& path, const image<image_format::F32>& image)
+{
+	return stbi_write_hdr(path.c_str(), image.width(), image.height(), 1, image.raw()) != 0;
+}
+
+static bool same_side(const glm::vec2& p1, const glm::vec2& p2, const glm::vec2& a, const glm::vec2& b)
+{
+	auto b_minus_a = glm::vec3(b.x - a.x, b.y - a.y, .0f);
+	auto p1_minus_a = glm::vec3(p1.x - a.x, p1.y - a.y, .0f);
+	auto p2_minus_a = glm::vec3(p2.x - a.x, p2.y - a.y, .0f);
+
+	auto cp1 = glm::cross(b_minus_a, p1_minus_a);
+	auto cp2 = glm::cross(b_minus_a, p2_minus_a);
+
+	if (glm::dot(cp1, cp2) >= 0)
+		return true;
+	else
+		return false;
+}
+
+bool point_in_tris(const glm::vec2& p, const glm::vec2& a, const glm::vec2& b, const glm::vec2& c)
+{
+	return same_side(p, a, b, c) && same_side(p, b, a, c) && same_side(p, c, a, b);
+}
+
+static double random_double()
+{
+	static std::random_device rd;
+	static std::mt19937 gen(rd());
+	static std::uniform_real_distribution<> dist(.0f, 1.f);
+
+	return dist(gen);
+}
+
+glm::vec3 cosine_weighted_hemisphere_sample(glm::vec3 n)
+{
+	double xi1 = random_double();
+	double xi2 = random_double();
+
+	double  theta = acos(sqrt(1.0 - xi1));
+	double  phi = 2.0 * PI * xi2;
+
+	float xs = static_cast<float>(sin(theta) * cos(phi));
+	float ys = static_cast<float>(cos(theta));
+	float zs = static_cast<float>(sin(theta) * sin(phi));
+
+	glm::vec3 h = n;
+	if (abs(h.x) <= abs(h.y) && abs(h.x) <= abs(h.z))
+		h.x = 1.0;
+	else if (abs(h.y) <= abs(h.x) && abs(h.y) <= abs(h.z))
+		h.y = 1.0;
+	else
+		h.z = 1.0;
+
+
+	glm::vec3 x = glm::normalize(glm::cross(h, n));
+	glm::vec3 z = glm::normalize(glm::cross(x, n));
+
+	glm::vec3 direction = xs * x + ys * n + zs * z;
+	return glm::normalize(direction);
 }
