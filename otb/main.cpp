@@ -8,6 +8,7 @@
 #include <queue>
 #include <mutex>
 #include <array>
+#include <cmath>
 
 #include "imgui/imgui.h"
 #include "imgui_impl_sdl_gl3.hpp"
@@ -53,7 +54,7 @@ struct RTCORE_ALIGN(16) ray_mask
 	uint32_t _[8];
 };
 
-double random_float()
+double random_double()
 {
 	static std::random_device rd;
 	static std::mt19937 gen(rd());
@@ -64,11 +65,11 @@ double random_float()
 
 glm::vec3 cosine_weighted_hemisphere(glm::vec3 n)
 {
-	double Xi1 = random_float();
-	double Xi2 = random_float();
+	double xi1 = random_double();
+	double xi2 = random_double();
 
-	double  theta = acos(sqrt(1.0 - Xi1));
-	double  phi = 2.0 * 3.1415926535897932384626433832795 * Xi2;
+	double  theta = acos(sqrt(1.0 - xi1));
+	double  phi = 2.0 * M_PI * xi2;
 
 	float xs = static_cast<float>(sin(theta) * cos(phi));
 	float ys = static_cast<float>(cos(theta));
@@ -136,7 +137,7 @@ struct edge_t
 	edge_t() = delete;
 	edge_t(const glm::vec2& _v0, const glm::vec2& _v1) : v0(_v0), v1(_v1)
 	{
-		// Ordering edges so that v0 is always the lower end
+		// Ordering vertices so that v0 is always the lower end
 		if (_v0.y > _v1.y)
 		{
 			v0 = _v1;
@@ -153,7 +154,7 @@ struct span_t
 	span_t() = delete;
 	span_t(uint32_t _x0, uint32_t _x1) : x0(_x0), x1(_x1)
 	{
-		// Ordering spans so that x0 is always the lower end
+		// Ordering vertices so that x0 is always the left end
 		if (_x0 > _x1)
 		{
 			x0 = _x1;
@@ -268,7 +269,7 @@ int main(int, char*[])
 			size_t num_vertices = shapes[i].mesh.positions.size() / 3;
 			size_t num_normals = shapes[i].mesh.normals.size() / 3;
 			size_t num_tex_coords = shapes[i].mesh.texcoords.size() / 2;
-			size_t num_indices = shapes[i].mesh.indices.size() / 3;
+			size_t num_tris = shapes[i].mesh.indices.size() / 3;
 
 			assert(num_vertices == num_normals && num_vertices == num_tex_coords);
 			
@@ -276,7 +277,7 @@ int main(int, char*[])
 			std::cout << "Vertices: " << num_vertices << std::endl;
 			std::cout << "Normals: " << num_normals << std::endl;
 			std::cout << "Texture coords: " << num_tex_coords << std::endl;
-			std::cout << "Indices: " << num_indices << std::endl;
+			std::cout << "Triangles: " << num_tris << std::endl;
 		}
 	}
 
@@ -740,10 +741,15 @@ int main(int, char*[])
 		// Gaussian blur
 		const uint32_t kernel_size = 3;
 		const std::array<float, kernel_size> gaussian_kernel = generate_gaussian_kernel_1d<kernel_size>(1.f);
-		const uint32_t num_blur_pass = 3;
+		uint32_t num_blur_pass = 3;
 
 		const int32_t kernel_half_width = static_cast<int32_t>(kernel_size) / 2;
 
+		float* temp_buffer = nullptr;
+		if (num_blur_pass > 0)
+			temp_buffer = new float[occlusion_map_width * occlusion_map_height];
+
+		// FIXME(Corralx): Use a different buffer as output for each pass
 		for (uint32_t pass = 0; pass < num_blur_pass; ++pass)
 		{
 			// First pass: blur horizontally
@@ -760,7 +766,7 @@ int main(int, char*[])
 					}
 
 					const uint32_t index = i * occlusion_map_width + j;
-					occlusion_map[index] = sum;
+					temp_buffer[index] = sum;
 				}
 			}
 
@@ -774,7 +780,7 @@ int main(int, char*[])
 					{
 						const uint32_t sample_i = clamp(i + k, (uint32_t)0, occlusion_map_height - 1);
 						const uint32_t index = sample_i * occlusion_map_width + j;
-						sum += occlusion_map[index] * gaussian_kernel[k + kernel_half_width];
+						sum += temp_buffer[index] * gaussian_kernel[k + kernel_half_width];
 					}
 
 					const uint32_t index = i * occlusion_map_width + j;
@@ -782,6 +788,9 @@ int main(int, char*[])
 				}
 			}
 		}
+
+		if (temp_buffer)
+			delete[] temp_buffer;
 
 		// Invert the values
 		for (uint32_t i = 0; i < occlusion_map_height; ++i)
