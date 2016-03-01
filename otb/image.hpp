@@ -14,20 +14,26 @@ namespace detail
 {
 
 template<image_format>
-struct format_to_storage_type
+struct format_to_pixel_info
 {
 };
 
 template<>
-struct format_to_storage_type<image_format::U8>
+struct format_to_pixel_info<image_format::U8>
 {
 	using type = uint8_t;
+
+	static const uint8_t channels = 1;
+	static const size_t size = channels * sizeof(type);
 };
 
 template<>
-struct format_to_storage_type<image_format::F32>
+struct format_to_pixel_info<image_format::F32>
 {
 	using type = float;
+
+	static const uint8_t channels = 1;
+	static const size_t size = channels * sizeof(type);
 };
 
 }
@@ -35,7 +41,7 @@ struct format_to_storage_type<image_format::F32>
 template<image_format F>
 class image
 {
-	using Format = typename detail::format_to_storage_type<F>::type;
+	using Format = typename detail::format_to_pixel_info<F>::type;
 
 public:
 	image() = delete;
@@ -60,7 +66,17 @@ public:
 		return F;
 	}
 
-	// TODO(Corralx): Do we want this? Should it be read-only?
+	uint8_t channels() const
+	{
+		return typename detail::format_to_pixel_info<F>::channels;
+	}
+
+	size_t size() const
+	{
+		return typename detail::format_to_pixel_info<F>::size * _width * _height;
+	}
+
+	// TODO(Corralx): Should this be read-only?
 	const Format* const raw() const
 	{
 		return _data;
