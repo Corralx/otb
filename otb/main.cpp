@@ -17,15 +17,17 @@
 #include "SDL2/SDL.h"
 #pragma warning (push, 0)
 #define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h"
+#include "stb/stb_image_write.h"
 #pragma warning (pop)
 #include "tinyobjloader/tiny_obj_loader.h"
 #include "elektra/filesystem.hpp"
 #define RMT_USE_OPENGL 1
 #include "remotery/remotery.h"
 
-#pragma warning (push, 0)
+#include "utils.hpp"
+
 #include "embree2/rtcore.h"
+#pragma warning (push, 0)
 #include "embree2/rtcore_ray.h"
 #pragma warning (pop)
 #include <xmmintrin.h>
@@ -749,7 +751,6 @@ int main(int, char*[])
 		if (num_blur_pass > 0)
 			temp_buffer = new float[occlusion_map_width * occlusion_map_height];
 
-		// FIXME(Corralx): Use a different buffer as output for each pass
 		for (uint32_t pass = 0; pass < num_blur_pass; ++pass)
 		{
 			// First pass: blur horizontally
@@ -804,42 +805,6 @@ int main(int, char*[])
 			}
 		}
 	}
-
-	/* Dithering
-	const uint32_t dither_matrix[8][8] =
-	{
-		{ 0, 32, 8, 40, 2, 34, 10, 42 },
-		{ 48, 16, 56, 24, 50, 18, 58, 26 },
-		{ 12, 44, 4, 36, 14, 46, 6, 38 },
-		{ 60, 28, 52, 20, 62, 30, 54, 22 },
-		{ 3, 35, 11, 43, 1, 33, 9, 41 },
-		{ 51, 19, 59, 27, 49, 17, 57, 25 },
-		{ 15, 47, 7, 39, 13, 45, 5, 37 },
-		{ 63, 31, 55, 23, 61, 29, 53, 21 }
-	};
-
-	// Step 3: Postprocess the occlusion map
-	{
-		for (uint32_t i = 0; i < occlusion_map_height; ++i)
-		{
-			for (uint32_t j = 0; j < occlusion_map_width; ++j)
-			{
-				uint32_t index = i * occlusion_map_width + j;
-				
-				uint32_t x = j % 8;
-				uint32_t y = i % 8;
-
-				float limit = static_cast<float>(dither_matrix[x][y] + 1) / 64.f;
-
-				float value = occlusion_map[index];
-				if (value < limit)
-					occlusion_map[index] = saturate(value + (limit / 16.f));
-				else
-					occlusion_map[index] = saturate(value - (limit / 16.f));
-			}
-		}
-	}
-	*/
 
 	// Step 4: Save the occlusion map to the disk
 	{

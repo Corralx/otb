@@ -5,11 +5,16 @@ project (otb CXX)
 set (
 	SRC
 	main.cpp
+	utils.cpp
+	embree.cpp
 	imgui_impl_sdl_gl3.cpp
 )
 
 set (
 	HEADER
+	utils.hpp
+	mesh.hpp
+	embree.hpp
 	imgui_impl_sdl_gl3.hpp
 )
 
@@ -50,6 +55,7 @@ include_directories (${IMGUI_INCLUDE_PATH})
 include_directories (${SDL2_INCLUDE_PATH})
 include_directories (${EMBREE_INCLUDE_PATH})
 include_directories (${REMOTERY_INCLUDE_PATH})
+include_directories (${STB_INCLUDE_PATH})
 
 add_executable (
 	otb

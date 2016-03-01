@@ -16,6 +16,7 @@ set (CPPFORMAT_PATH ${CMAKE_SOURCE_DIR}/external/cppformat)
 set (TINYOBJLOADER_PATH ${CMAKE_SOURCE_DIR}/external/tinyobjloader)
 set (IMGUI_PATH ${CMAKE_SOURCE_DIR}/external/imgui)
 set (REMOTERY_PATH ${CMAKE_SOURCE_DIR}/external/remotery)
+set (STB_PATH ${CMAKE_SOURCE_DIR}/external/stb)
 
 set (
 	GL3W_INCLUDE_PATH
@@ -72,6 +73,11 @@ set (
 set (
 	REMOTERY_INCLUDE_PATH
 	${REMOTERY_PATH}
+)
+
+set (
+	STB_INCLUDE_PATH
+	${STB_PATH}
 )
 
 add_subdirectory (${GL3W_PATH})
