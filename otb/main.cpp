@@ -25,6 +25,8 @@
 #include "utils.hpp"
 #include "image.hpp"
 #include "embree.hpp"
+#include "mesh.hpp"
+#include "occlusion.hpp"
 
 #include "embree2/rtcore.h"
 #pragma warning (push, 0)
@@ -133,7 +135,6 @@ int main(int, char*[])
 	SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-	SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1);
 
 #ifdef _DEBUG
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG |
@@ -175,7 +176,7 @@ int main(int, char*[])
 
 	std::vector<tinyobj::shape_t> shapes;
 	{
-		elk::path mesh_path("chair/chair.obj");
+		elk::path mesh_path("test/test.obj");
 		std::vector<tinyobj::material_t> materials;
 		std::string error;
 		bool res = tinyobj::LoadObj(shapes, materials, error, mesh_path.c_str(), nullptr, true);
@@ -438,15 +439,14 @@ int main(int, char*[])
 	uint32_t* indices_map;
 	{
 		indices_map = new uint32_t[occlusion_map_width * occlusion_map_height];
-		uint32_t* output = indices_map;
-		memset(output, 255, occlusion_map_width * occlusion_map_height * sizeof(uint32_t));
+		memset(indices_map, 255, occlusion_map_width * occlusion_map_height * sizeof(uint32_t));
 
 		// Texture
 		uint32_t texture;
 		glGenTextures(1, &texture);
 		glBindTexture(GL_TEXTURE_2D, texture);
 
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_R32UI, occlusion_map_width, occlusion_map_height, 0, GL_RED_INTEGER, GL_UNSIGNED_INT, output);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_R32UI, occlusion_map_width, occlusion_map_height, 0, GL_RED_INTEGER, GL_UNSIGNED_INT, indices_map);
 
 		// Framebuffer
 		uint32_t framebuffer;
@@ -524,34 +524,14 @@ int main(int, char*[])
 		glDrawElements(GL_TRIANGLES, (uint32_t)index_data.size(), GL_UNSIGNED_INT, nullptr);
 
 		// Copy back the data
-		glGetTexImage(GL_TEXTURE_2D, 0, GL_RED_INTEGER, GL_UNSIGNED_INT, output);
+		glGetTexImage(GL_TEXTURE_2D, 0, GL_RED_INTEGER, GL_UNSIGNED_INT, indices_map);
 
-		// TODO: Save to disk the output
-		uint8_t* file = new uint8_t[occlusion_map_width * occlusion_map_height];
-		memset(file, 255, occlusion_map_width * occlusion_map_height);
-
-		for (uint32_t i = 0; i < occlusion_map_height; ++i)
-		{
-			for (uint32_t j = 0; j < occlusion_map_width; ++j)
-			{
-				uint32_t index = i * occlusion_map_width + j;
-				uint32_t value = output[index];
-
-				if (value != std::numeric_limits<uint32_t>::max())
-					file[index] = 0;
-			}
-		}
-
-		stbi_write_tga("maps/raster.tga", occlusion_map_width, occlusion_map_height, 1, file);
-
+		// Reset State
 		glViewport(0, 0, APP_WIDTH, APP_HEIGHT);
 		glUseProgram(0);
 		glBindVertexArray(0);
 		glBindTexture(GL_TEXTURE_2D, 0);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-		// Free memory
-		delete[] file;
 
 		// Delete program
 		glDeleteShader(vs);
@@ -575,6 +555,7 @@ int main(int, char*[])
 		const tinyobj::mesh_t& mesh = shapes[mesh_index].mesh;
 
 		occlusion_map = new float[occlusion_map_width * occlusion_map_height];
+		// Setting the default value to 0, meaning full visibility
 		memset(occlusion_map, 0, occlusion_map_width * occlusion_map_height * sizeof(float));
 
 		const uint32_t quality = 1;

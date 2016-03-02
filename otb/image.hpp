@@ -26,7 +26,7 @@ struct format_to_pixel_info<image_format::U8>
 	using type = uint8_t;
 
 	static const uint8_t channels = 1;
-	static const size_t size = channels * sizeof(type);
+	static const size_t size = channels * sizeof(uint8_t);
 };
 
 template<>
@@ -35,7 +35,7 @@ struct format_to_pixel_info<image_format::F32>
 	using type = float;
 
 	static const uint8_t channels = 1;
-	static const size_t size = channels * sizeof(type);
+	static const size_t size = channels * sizeof(float);
 };
 
 template<>
@@ -44,15 +44,17 @@ struct format_to_pixel_info<image_format::U32>
 	using type = uint32_t;
 
 	static const uint8_t channels = 1;
-	static const size_t size = channels * sizeof(type);
+	static const size_t size = channels * sizeof(uint32_t);
 };
 
 }
 
+#define GET_PIXEL_INFO(info) typename detail::format_to_pixel_info<F>::info
+
 template<image_format F>
 class image
 {
-	using Format = typename detail::format_to_pixel_info<F>::type;
+	using Format = GET_PIXEL_INFO(type);
 
 public:
 	image() = delete;
@@ -68,8 +70,8 @@ public:
 	
 	~image()
 	{
-		if (_data)
-			delete[] _data;
+		assert(_data);
+		delete[] _data;
 	}
 
 	void initialize(uint8_t val)
@@ -84,16 +86,20 @@ public:
 
 	uint8_t channels() const
 	{
-		return typename detail::format_to_pixel_info<F>::channels;
+		return GET_PIXEL_INFO(channels);
 	}
 
 	size_t size() const
 	{
-		return typename detail::format_to_pixel_info<F>::size * _width * _height;
+		return GET_PIXEL_INFO(size) * _width * _height;
 	}
 
-	// TODO(Corralx): Should this be read-only?
 	const Format* const raw() const
+	{
+		return _data;
+	}
+
+	Format* raw()
 	{
 		return _data;
 	}
@@ -114,8 +120,16 @@ public:
 		return _data[index];
 	}
 
+	const Format& operator[](size_t index) const
+	{
+		assert(index < _width * _height);
+		return _data[index];
+	}
+
 private:
 	Format* _data;
 	uint32_t _width;
 	uint32_t _height;
 };
+
+#undef GET_PIXEL_INFO

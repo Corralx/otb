@@ -10,8 +10,6 @@
 
 #include <random>
 
-static constexpr double PI = 3.14159265358979323846264338327950288;
-
 std::vector<mesh_t> load_mesh(const elk::path& path)
 {
 	if (path.empty() || !elk::exists(path) || path.extension() != ".obj")
@@ -36,6 +34,7 @@ std::vector<mesh_t> load_mesh(const elk::path& path)
 		size_t num_tex_coords = tiny_mesh.texcoords.size() / 2;
 		size_t num_tris = tiny_mesh.indices.size() / 3;
 
+		// TODO(Corralx): Signal errors in some way
 		// TODO(Corralx): Calculate smooth normals if not present
 		if (num_vertices == 0 || num_tris == 0 || num_normals != num_vertices || num_tex_coords != num_vertices)
 			continue;
@@ -60,6 +59,10 @@ std::vector<mesh_t> load_mesh(const elk::path& path)
 template<>
 bool write_image(const elk::path& path, const image<image_format::U8>& image, image_extension ext)
 {
+	assert(image.width() > 0);
+	assert(image.height() > 0);
+	assert(image.raw());
+
 	switch (ext)
 	{
 		case image_extension::BMP:
@@ -80,6 +83,10 @@ bool write_image(const elk::path& path, const image<image_format::U8>& image, im
 
 bool write_image(const elk::path& path, const image<image_format::F32>& image)
 {
+	assert(image.width() > 0);
+	assert(image.height() > 0);
+	assert(image.raw());
+
 	return stbi_write_hdr(path.c_str(), image.width(), image.height(), 1, image.raw()) != 0;
 }
 
@@ -112,6 +119,7 @@ static double random_double()
 	return dist(gen);
 }
 
+// NOTE(Corralx): https://pathtracing.wordpress.com/2011/03/03/cosine-weighted-hemisphere/
 glm::vec3 cosine_weighted_hemisphere_sample(glm::vec3 n)
 {
 	double xi1 = random_double();
@@ -131,7 +139,6 @@ glm::vec3 cosine_weighted_hemisphere_sample(glm::vec3 n)
 		h.y = 1.0;
 	else
 		h.z = 1.0;
-
 
 	glm::vec3 x = glm::normalize(glm::cross(h, n));
 	glm::vec3 z = glm::normalize(glm::cross(x, n));

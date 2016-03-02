@@ -7,6 +7,7 @@ set (
 	main.cpp
 	utils.cpp
 	embree.cpp
+	occlusion.cpp
 	imgui_impl_sdl_gl3.cpp
 )
 
@@ -16,6 +17,7 @@ set (
 	mesh.hpp
 	embree.hpp
 	image.hpp
+	occlusion.hpp
 	imgui_impl_sdl_gl3.hpp
 )
 

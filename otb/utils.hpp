@@ -4,6 +4,9 @@
 #include "image.hpp"
 
 #include <cstdint>
+#include <future>
+
+constexpr double PI = 3.14159265358979323846264338327950288;
 
 namespace elk
 {
@@ -34,7 +37,7 @@ std::array<float, kernel_size> generate_gaussian_kernel_1d(float sigma)
 	auto gauss_generator = [](float x, float sigma)
 	{
 		float c = 2.f * sigma * sigma;
-		return std::exp(-x * x / c) / std::sqrt(c * (float)M_PI);
+		return std::exp(-x * x / c) / std::sqrt(c * (float)PI);
 	};
 
 	const int32_t kernel_half_size = static_cast<int32_t>(kernel_size) / 2;
@@ -59,11 +62,18 @@ std::array<float, kernel_size> generate_gaussian_kernel_1d(float sigma)
 template<typename T>
 T saturate(T value)
 {
-	return std::min(1.f, std::max(.0f, value));
+	return std::min(static_cast<T>(1), std::max(static_cast<T>(0), value));
 }
 
 template<typename T>
 T clamp(T value, T min, T max)
 {
 	return std::min(max, std::max(min, value));
+}
+
+template<typename T>
+bool is_ready(const std::future<T>& f)
+{
+	// NOTE(Corralx): This doesn't work for deferred future
+	return f.wait_for(0) == std::future_status::ready;
 }

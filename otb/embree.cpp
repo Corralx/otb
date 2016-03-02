@@ -13,6 +13,8 @@
 #include "embree2/rtcore_ray.h"
 #pragma warning (pop)
 
+#include <cassert>
+
 namespace embree
 {
 
@@ -50,19 +52,25 @@ static const ray_mask mask =
 
 context::context()
 {
-	// Setting the CPU register flags for Embree
+	// Setting the CPU register flags
 	_MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
 	_MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
 
 	_device = rtcNewDevice();
 	_scene = rtcDeviceNewScene(_device, RTC_SCENE_STATIC | RTC_SCENE_INCOHERENT |
 							   RTC_SCENE_HIGH_QUALITY | RTC_SCENE_ROBUST, RTC_INTERSECT8);
+
+	assert(_scene);
+	assert(_device);
 }
 
 context::~context()
 {
 	for (mesh_id id : _geometry)
 		rtcDeleteGeometry(_scene, id);
+
+	assert(_scene);
+	assert(_device);
 
 	rtcDeleteScene(_scene);
 	rtcDeleteDevice(_device);
@@ -72,6 +80,10 @@ mesh_id context::add_mesh(const mesh_t& mesh)
 {
 	size_t num_indices = mesh.faces().size();
 	size_t num_vertices = mesh.vertices().size();
+
+	assert(num_indices > 0);
+	assert(num_vertices > 0);
+
 	mesh_id id = rtcNewTriangleMesh(_scene, RTC_GEOMETRY_STATIC, num_indices, num_vertices);
 
 	auto& vertices = mesh.vertices();
@@ -101,7 +113,10 @@ mesh_id context::add_mesh(const mesh_t& mesh)
 
 void context::remove_mesh(mesh_id id)
 {
-	_geometry.erase(std::find(std::begin(_geometry), std::end(_geometry), id));
+	auto pos = std::find(std::begin(_geometry), std::end(_geometry), id);
+	assert(pos != std::end(_geometry));
+
+	_geometry.erase(pos);
 	rtcDeleteGeometry(_scene, id);
 }
 
