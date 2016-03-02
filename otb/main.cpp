@@ -100,7 +100,10 @@ struct tile_work
 	bool valid;
 };
 
-// TODO(Corralx): Set up OpenGL in debug mode when needed
+#ifdef _DEBUG
+static void gl_debug_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, void* userParam);
+#endif
+
 // TODO(Corralx): Set up some way to disable/enable remotery when needed
 int main(int, char*[])
 {
@@ -112,12 +115,17 @@ int main(int, char*[])
 	for (uint32_t& ui : _ray_mask._)
 		ui = 0xFFFFFFFF;
 
-	if (SDL_Init(SDL_INIT_EVERYTHING) != 0)
+	if (SDL_Init(SDL_INIT_VIDEO) != 0)
 	{
 		std::cout << "SDL initialization error: " << SDL_GetError() << std::endl;
 		return 1;
 	}
 
+	SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
+	SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
+	SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
+	SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 8);
+	SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
@@ -125,6 +133,14 @@ int main(int, char*[])
 	SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+	SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1);
+
+#ifdef _DEBUG
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG |
+						SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
+#else
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
+#endif
 
 	SDL_DisplayMode current;
 	SDL_GetCurrentDisplayMode(0, &current);
@@ -133,6 +149,12 @@ int main(int, char*[])
 	SDL_GLContext glcontext = SDL_GL_CreateContext(window);
 
 	gl3wInit();
+
+#ifdef _DEBUG
+	glEnable(GL_DEBUG_OUTPUT);
+	glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+	glDebugMessageCallback((GLDEBUGPROC)gl_debug_callback, nullptr);
+#endif
 
 	ImGui_ImplSdlGL3_Init(window);
 
@@ -913,3 +935,53 @@ int main(int, char*[])
 
 	return 0;
 }
+
+#ifdef _DEBUG
+void gl_debug_callback(GLenum, GLenum type, GLuint id, GLenum severity, GLsizei, const GLchar* message, void*)
+{
+	using namespace std;
+
+	cout << "---------------------opengl-callback-start------------" << endl;
+	cout << "message: " << message << endl;
+	cout << "type: ";
+	switch (type)
+	{
+		case GL_DEBUG_TYPE_ERROR:
+			cout << "ERROR";
+			break;
+		case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR:
+			cout << "DEPRECATED_BEHAVIOR";
+			break;
+		case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:
+			cout << "UNDEFINED_BEHAVIOR";
+			break;
+		case GL_DEBUG_TYPE_PORTABILITY:
+			cout << "PORTABILITY";
+			break;
+		case GL_DEBUG_TYPE_PERFORMANCE:
+			cout << "PERFORMANCE";
+			break;
+		case GL_DEBUG_TYPE_OTHER:
+			cout << "OTHER";
+			break;
+	}
+	cout << endl;
+
+	cout << "id: " << id << endl;
+	cout << "severity: ";
+	switch (severity)
+	{
+		case GL_DEBUG_SEVERITY_LOW:
+			cout << "LOW";
+			break;
+		case GL_DEBUG_SEVERITY_MEDIUM:
+			cout << "MEDIUM";
+			break;
+		case GL_DEBUG_SEVERITY_HIGH:
+			cout << "HIGH";
+			break;
+	}
+	cout << endl;
+	cout << "---------------------opengl-callback-end--------------" << endl;
+}
+#endif
