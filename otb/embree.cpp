@@ -16,6 +16,21 @@
 namespace embree
 {
 
+struct vertex
+{
+	float x;
+	float y;
+	float z;
+	float _padding;
+};
+
+struct triangle
+{
+	int32_t v0;
+	int32_t v1;
+	int32_t v2;
+};
+
 struct RTCORE_ALIGN(16) ray_mask
 {
 	uint32_t _[8];

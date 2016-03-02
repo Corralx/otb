@@ -14,21 +14,6 @@ struct __RTCScene;
 namespace embree
 {
 
-struct vertex
-{
-	float x;
-	float y;
-	float z;
-	float _padding;
-};
-
-struct triangle
-{
-	int32_t v0;
-	int32_t v1;
-	int32_t v2;
-};
-
 using mesh_id = uint32_t;
 
 const mesh_id NO_HIT_ID = std::numeric_limits<mesh_id>::max();
@@ -47,7 +32,7 @@ struct ray
 	std::array<glm::vec3, 8> directions;
 };
 
-// TODO(Corralx): Support ray masking
+// TODO(Corralx): Support ray masking, not needed for now though
 class context
 {
 public:

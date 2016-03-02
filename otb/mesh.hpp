@@ -28,9 +28,9 @@ class mesh_t
 	mesh_t() = default;
 
 public:
-	mesh_t(const mesh_t&) = default;
+	mesh_t(const mesh_t&) = delete;
 	mesh_t(mesh_t&&) = default;
-	mesh_t& operator=(const mesh_t&) = default;
+	mesh_t& operator=(const mesh_t&) = delete;
 	mesh_t& operator=(mesh_t&&) = default;
 	~mesh_t() = default;
 

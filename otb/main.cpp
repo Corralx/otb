@@ -191,21 +191,6 @@ int main(int, char*[])
 	if (!embree_scene)
 		std::cerr << "Error creating Embree scene!" << std::endl;
 
-	rtcDeviceSetMemoryMonitorFunction(embree_device, [](const ssize_t bytes, const bool)
-	{
-		if (bytes > 0)
-			std::cout << "Embree: Allocating " << bytes << " bytes of memory!" << std::endl;
-		else
-			std::cout << "Embree: Deallocating " << bytes << " bytes of memory!" << std::endl;
-		return true;
-	});
-
-	rtcSetProgressMonitorFunction(embree_scene, [](void*, const double n)
-	{
-		std::cout << "Embree: Building data structure: " << (n * 100) << "%!" << std::endl;
-		return true;
-	}, nullptr);
-
 	std::vector<uint32_t> embree_meshes;
 	for (auto& s : shapes)
 	{
@@ -413,8 +398,8 @@ int main(int, char*[])
 						valid_sample = samples[sample_idx];
 				}
 
-				// We may have an even distribution of samples and choosen an invalid one in the previous loop
-				// If there was a valid sample we use it, if not then all samples are invalid so is safe to use it
+				// We may have an even distribution of samples and choose an invalid one in the previous loop
+				// If there was a valid sample we use it, if not then all samples are invalid and is safe to use it
 				if (best_sample == std::numeric_limits<uint32_t>::max())
 					best_sample = valid_sample;
 
@@ -425,7 +410,7 @@ int main(int, char*[])
 		delete[] index_map;
 	}
 	
-	// Step 2: Rasterize the occlusion map
+	// Step 2: Generate the occlusion map
 	float* occlusion_map;
 	{
 		const tinyobj::mesh_t& mesh = shapes[mesh_index].mesh;
@@ -777,9 +762,8 @@ int main(int, char*[])
 		ImGui::Render();
 		rmt_EndCPUSample();
 
-		rmt_EndCPUSample();
-
 		SDL_GL_SwapWindow(window);
+		rmt_EndCPUSample();
 	}
 
 	rmt_UnbindOpenGL();

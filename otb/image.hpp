@@ -2,12 +2,14 @@
 
 #include <cstdint>
 #include <cassert>
+#include <cstring>
 
 // TODO(Corralx): Eventually add other formats and storages
 enum class image_format : uint8_t
 {
 	U8 = 0,
-	F32 = 1
+	F32 = 1,
+	U32 = 2
 };
 
 namespace detail
@@ -36,6 +38,15 @@ struct format_to_pixel_info<image_format::F32>
 	static const size_t size = channels * sizeof(type);
 };
 
+template<>
+struct format_to_pixel_info<image_format::U32>
+{
+	using type = uint32_t;
+
+	static const uint8_t channels = 1;
+	static const size_t size = channels * sizeof(type);
+};
+
 }
 
 template<image_format F>
@@ -59,6 +70,11 @@ public:
 	{
 		if (_data)
 			delete[] _data;
+	}
+
+	void initialize(uint8_t val)
+	{
+		memset(_data, val, size());
 	}
 
 	image_format format() const
