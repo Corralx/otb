@@ -1,6 +1,8 @@
 #include "occlusion.hpp"
 #include "mesh.hpp"
 
+#include "glm/glm.hpp"
+
 #include <thread>
 #include <mutex>
 #include <queue>

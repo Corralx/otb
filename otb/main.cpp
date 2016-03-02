@@ -1,15 +1,12 @@
 #include <iostream>
 #include <cstdint>
 #include <string>
-#include <random>
 #include <algorithm>
 #include <limits>
 #include <thread>
 #include <vector>
 #include <queue>
 #include <mutex>
-#include <array>
-#include <cmath>
 
 #include "imgui/imgui.h"
 #include "imgui_impl_sdl_gl3.hpp"
@@ -27,6 +24,7 @@
 #include "embree.hpp"
 #include "mesh.hpp"
 #include "occlusion.hpp"
+#include "rasterizer.hpp"
 
 #include "embree2/rtcore.h"
 #pragma warning (push, 0)
@@ -106,7 +104,9 @@ struct tile_work
 static void gl_debug_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, void* userParam);
 #endif
 
+// TODO(Corralx): Rewrite the imgui <-> SDL bridge
 // TODO(Corralx): Set up some way to disable/enable remotery when needed
+// TODO(Corralx): Investigate an ImGui file dialog
 int main(int, char*[])
 {
 	// Setting the CPU register flags for Embree
