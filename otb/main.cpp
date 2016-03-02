@@ -153,7 +153,7 @@ int main(int, char*[])
 
 	std::vector<tinyobj::shape_t> shapes;
 	{
-		elk::path mesh_path("test/test.obj");
+		elk::path mesh_path("chair/chair.obj");
 		std::vector<tinyobj::material_t> materials;
 		std::string error;
 		bool res = tinyobj::LoadObj(shapes, materials, error, mesh_path.c_str(), nullptr, true);
@@ -233,6 +233,7 @@ int main(int, char*[])
 	const uint32_t occlusion_map_width = 1024;
 	const uint32_t occlusion_map_height = occlusion_map_width;
 
+	/*
 	// Step 1: Find the triangle index covering each pixel in the occlusion map
 	uint32_t* indices_map;
 	{
@@ -409,7 +410,143 @@ int main(int, char*[])
 
 		delete[] index_map;
 	}
-	
+	*/
+
+	// EXPERIMENTAL(Corralx): Rasterize uvs with the gpu
+	uint32_t* indices_map;
+	{
+		indices_map = new uint32_t[occlusion_map_width * occlusion_map_height];
+		uint32_t* output = indices_map;
+		memset(output, 255, occlusion_map_width * occlusion_map_height * sizeof(uint32_t));
+
+		// Texture
+		uint32_t texture;
+		glGenTextures(1, &texture);
+		glBindTexture(GL_TEXTURE_2D, texture);
+
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_R32UI, occlusion_map_width, occlusion_map_height, 0, GL_RED_INTEGER, GL_UNSIGNED_INT, output);
+
+		// Framebuffer
+		uint32_t framebuffer;
+		glGenFramebuffers(1, &framebuffer);
+		glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, 0);
+
+		assert(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
+
+		// VAO
+		uint32_t vao;
+		glGenVertexArrays(1, &vao);
+		glBindVertexArray(vao);
+
+		// Vertices
+		const auto& vertex_data = shapes[mesh_index].mesh.texcoords;
+		uint32_t vertex_buffer;
+		glGenBuffers(1, &vertex_buffer);
+		glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(float) * vertex_data.size(), vertex_data.data(), GL_STATIC_DRAW);
+
+		glEnableVertexAttribArray(0);
+		glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
+
+		// Indices
+		const auto& index_data = shapes[mesh_index].mesh.indices;
+		uint32_t index_buffer;
+		glGenBuffers(1, &index_buffer);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(uint32_t) * index_data.size(), index_data.data(), GL_STATIC_DRAW);
+
+		// Program
+		const char* vs_source =
+			"#version 330 core\n \
+			 \n \
+			 layout(location = 0) in vec2 position;\n \
+			 \n \
+			 void main()\n \
+			 {\n \
+				 gl_Position = vec4(position * 2.0 - 1.0, 0.5, 1.0);\n \
+			 }\n \
+			";
+
+		const char* fs_source =
+			"#version 330 core\n \
+			 \n \
+			 layout(location = 0) out uint out_color;\n \
+			 \n \
+			 void main()\n \
+			 {\n \
+				 out_color = uint(gl_PrimitiveID);\n \
+			 }\n \
+			";
+		fs_source;
+
+		uint32_t vs = glCreateShader(GL_VERTEX_SHADER);
+		glShaderSource(vs, 1, &vs_source, nullptr);
+		glCompileShader(vs);
+
+		uint32_t fs = glCreateShader(GL_FRAGMENT_SHADER);
+		glShaderSource(fs, 1, &fs_source, nullptr);
+		glCompileShader(fs);
+
+		uint32_t program = glCreateProgram();
+		glAttachShader(program, vs);
+		glAttachShader(program, fs);
+		glLinkProgram(program);
+
+		assert(glGetError() == GL_NO_ERROR);
+
+		glUseProgram(program);
+		glViewport(0, 0, occlusion_map_width, occlusion_map_height);
+
+		// Draw
+		glDrawElements(GL_TRIANGLES, (uint32_t)index_data.size(), GL_UNSIGNED_INT, nullptr);
+
+		// Copy back the data
+		glGetTexImage(GL_TEXTURE_2D, 0, GL_RED_INTEGER, GL_UNSIGNED_INT, output);
+
+		// TODO: Save to disk the output
+		uint8_t* file = new uint8_t[occlusion_map_width * occlusion_map_height];
+		memset(file, 255, occlusion_map_width * occlusion_map_height);
+
+		for (uint32_t i = 0; i < occlusion_map_height; ++i)
+		{
+			for (uint32_t j = 0; j < occlusion_map_width; ++j)
+			{
+				uint32_t index = i * occlusion_map_width + j;
+				uint32_t value = output[index];
+
+				if (value != std::numeric_limits<uint32_t>::max())
+					file[index] = 0;
+			}
+		}
+
+		stbi_write_tga("maps/raster.tga", occlusion_map_width, occlusion_map_height, 1, file);
+
+		glViewport(0, 0, APP_WIDTH, APP_HEIGHT);
+		glUseProgram(0);
+		glBindVertexArray(0);
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+		// Free memory
+		delete[] file;
+
+		// Delete program
+		glDeleteShader(vs);
+		glDeleteShader(fs);
+		glDeleteProgram(program);
+
+		// Delete buffers
+		glDeleteBuffers(1, &index_buffer);
+		glDeleteBuffers(1, &vertex_buffer);
+		glDeleteVertexArrays(1, &vao);
+
+		// Delete framebuffer
+		glDeleteTextures(1, &texture);
+		glDeleteFramebuffers(1, &framebuffer);
+		assert(glGetError() == GL_NO_ERROR);
+	}
+
 	// Step 2: Generate the occlusion map
 	float* occlusion_map;
 	{
@@ -418,7 +555,7 @@ int main(int, char*[])
 		occlusion_map = new float[occlusion_map_width * occlusion_map_height];
 		memset(occlusion_map, 0, occlusion_map_width * occlusion_map_height * sizeof(float));
 
-		const uint32_t quality = 8;
+		const uint32_t quality = 1;
 		const uint32_t sample_per_pixel = quality * 8;
 		const float far_distance = 15.f;
 		const float quadratic_attenuation = 1.0f;
@@ -712,9 +849,9 @@ int main(int, char*[])
 			}
 		}
 		
-		//stbi_write_tga(out_path_tga.c_str(), occlusion_map_width, occlusion_map_height, 1, out_image);
+		stbi_write_tga(out_path_tga.c_str(), occlusion_map_width, occlusion_map_height, 1, out_image);
 		stbi_write_hdr(out_path_hdr.c_str(), occlusion_map_width, occlusion_map_height, 1, occlusion_map);
-		//stbi_write_png(out_path_png.c_str(), occlusion_map_width, occlusion_map_height, 1, out_image, 0);
+		stbi_write_png(out_path_png.c_str(), occlusion_map_width, occlusion_map_height, 1, out_image, 0);
 
 		delete[] out_image;
 	}
