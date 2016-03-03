@@ -5,6 +5,8 @@
 
 #include <cstdint>
 #include <future>
+#include <array>
+#include <vector>
 
 constexpr double PI = 3.14159265358979323846264338327950288;
 
@@ -31,21 +33,22 @@ bool point_in_tris(const glm::vec2& p, const glm::vec2& a, const glm::vec2& b, c
 
 glm::vec3 cosine_weighted_hemisphere_sample(glm::vec3 n);
 
+// TODO(Corralx): Remove this version as it is duplicated
 template<uint32_t kernel_size>
 std::array<float, kernel_size> generate_gaussian_kernel_1d(float sigma)
 {
+	const int32_t kernel_half_size = static_cast<int32_t>(kernel_size) / 2;
+	std::array<float, kernel_size> kernel;
+	float weight_sum = 0;
+
 	auto gauss_generator = [](float x, float sigma)
 	{
 		float c = 2.f * sigma * sigma;
 		return std::exp(-x * x / c) / std::sqrt(c * (float)PI);
 	};
 
-	const int32_t kernel_half_size = static_cast<int32_t>(kernel_size) / 2;
-	std::array<float, kernel_size> kernel;
-	float weight_sum = 0;
-
 	// kernel generation
-	for (int32_t i = 0; i < kernel_size; ++i)
+	for (int32_t i = 0; i < static_cast<int32_t>(kernel_size); ++i)
 	{
 		float value = gauss_generator(static_cast<float>(i - kernel_half_size), sigma);
 		kernel[i] = value;
@@ -53,11 +56,13 @@ std::array<float, kernel_size> generate_gaussian_kernel_1d(float sigma)
 	}
 
 	// Normalization
-	for (int32_t i = 0; i < kernel_size; ++i)
+	for (uint32_t i = 0; i < kernel_size; ++i)
 		kernel[i] /= weight_sum;
 
 	return std::move(kernel);
 }
+
+std::vector<float> generate_gaussian_kernel_1d(float sigma, uint32_t kernel_size);
 
 template<typename T>
 T saturate(T value)

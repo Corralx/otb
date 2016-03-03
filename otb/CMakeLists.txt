@@ -9,6 +9,7 @@ set (
 	embree.cpp
 	occlusion.cpp
 	rasterizer.cpp
+	postprocess.cpp
 	imgui_impl_sdl_gl3.cpp
 )
 
@@ -20,6 +21,7 @@ set (
 	image.hpp
 	occlusion.hpp
 	rasterizer.hpp
+	postprocess.hpp
 	imgui_impl_sdl_gl3.hpp
 )
 

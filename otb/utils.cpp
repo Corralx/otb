@@ -146,3 +146,30 @@ glm::vec3 cosine_weighted_hemisphere_sample(glm::vec3 n)
 	glm::vec3 direction = xs * x + ys * n + zs * z;
 	return glm::normalize(direction);
 }
+
+std::vector<float> generate_gaussian_kernel_1d(float sigma, uint32_t kernel_size)
+{
+	const int32_t kernel_half_size = static_cast<int32_t>(kernel_size) / 2;
+	std::vector<float> kernel(kernel_size);
+	float weight_sum = 0;
+
+	auto gauss_generator = [](float x, float sigma)
+	{
+		float c = 2.f * sigma * sigma;
+		return std::exp(-x * x / c) / std::sqrt(c * (float)PI);
+	};
+
+	// kernel generation
+	for (int32_t i = 0; i < static_cast<int32_t>(kernel_size); ++i)
+	{
+		float value = gauss_generator(static_cast<float>(i - kernel_half_size), sigma);
+		kernel[i] = value;
+		weight_sum += value;
+	}
+
+	// Normalization
+	for (uint32_t i = 0; i < kernel_size; ++i)
+		kernel[i] /= weight_sum;
+
+	return std::move(kernel);
+}

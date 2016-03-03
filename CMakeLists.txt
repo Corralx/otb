@@ -80,6 +80,8 @@ set (
 	${STB_PATH}
 )
 
+add_definitions (-DRMT_USE_OPENGL)
+
 add_subdirectory (${GL3W_PATH})
 add_subdirectory (${ELEKTRA_PATH})
 add_subdirectory (${CPPFORMAT_PATH})

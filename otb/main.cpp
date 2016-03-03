@@ -1,12 +1,7 @@
 #include <iostream>
-#include <cstdint>
 #include <string>
-#include <algorithm>
 #include <limits>
-#include <thread>
-#include <vector>
 #include <queue>
-#include <mutex>
 
 #include "imgui/imgui.h"
 #include "imgui_impl_sdl_gl3.hpp"
@@ -16,7 +11,6 @@
 #include "stb/stb_image_write.h"
 #include "tinyobjloader/tiny_obj_loader.h"
 #include "elektra/filesystem.hpp"
-#define RMT_USE_OPENGL 1
 #include "remotery/remotery.h"
 
 #include "utils.hpp"
@@ -25,6 +19,7 @@
 #include "mesh.hpp"
 #include "occlusion.hpp"
 #include "rasterizer.hpp"
+#include "postprocess.hpp"
 
 #include "embree2/rtcore.h"
 #pragma warning (push, 0)
@@ -436,6 +431,7 @@ int main(int, char*[])
 	*/
 
 	// EXPERIMENTAL(Corralx): Rasterize uvs with the gpu
+	// Step 1: Find the triangle index covering each pixel in the occlusion map
 	uint32_t* indices_map;
 	{
 		indices_map = new uint32_t[occlusion_map_width * occlusion_map_height];
