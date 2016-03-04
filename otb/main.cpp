@@ -1,17 +1,11 @@
 #include <iostream>
-#include <string>
-#include <limits>
-#include <queue>
 
 #include "imgui/imgui.h"
 #include "imgui_impl_sdl_gl3.hpp"
-#include "glm/glm.hpp"
 #include "GL/gl3w.h"
 #include "SDL2/SDL.h"
-#include "stb/stb_image_write.h"
-#include "tinyobjloader/tiny_obj_loader.h"
-#include "elektra/filesystem.hpp"
 #include "remotery/remotery.h"
+#include "elektra/filesystem.hpp"
 
 #include "utils.hpp"
 #include "image.hpp"
@@ -20,13 +14,6 @@
 #include "occlusion.hpp"
 #include "rasterizer.hpp"
 #include "postprocess.hpp"
-
-#include "embree2/rtcore.h"
-#pragma warning (push, 0)
-#include "embree2/rtcore_ray.h"
-#pragma warning (pop)
-#include <xmmintrin.h>
-#include <pmmintrin.h>
 
 static constexpr uint32_t APP_WIDTH = 1280;
 static constexpr uint32_t APP_HEIGHT = 720;
