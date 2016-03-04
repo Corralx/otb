@@ -21,20 +21,8 @@ static void invert_helper(image_f32& image, std::promise<void> promise)
 		}
 	}
 
-	promise.set_value_at_thread_exit();
+	promise.set_value();
 }
-
-/*
-std::future<void> invert(image_f32& image)
-{
-	std::promise<void> promise;
-	std::future<void> future;
-	std::thread([](image_f32& image, std::promise<void> promise) { invert_helper(image, std::move(promise)); },
-				std::ref(image), std::move(promise)).detach();
-
-	return std::move(future);
-}
-*/
 
 std::future<void> invert(image_f32& image)
 {
@@ -90,23 +78,10 @@ static void gaussian_blur_helper(image_f32& image, uint32_t num_pass, uint32_t k
 		}
 	}
 
-	promise.set_value_at_thread_exit();
+	promise.set_value();
 }
 
-/*
-std::future<void> gaussian_blur(image_f32& image, uint8_t num_pass, uint8_t kernel_size, float sigma = 1.f)
-{
-	std::promise<void> promise;
-	std::future<void> future;
-	std::thread([](image_f32& image, uint8_t num_pass, uint8_t kernel_size, float sigma, std::promise<void> promise)
-				{ gaussian_blur_helper(image, num_pass, kernel_size, sigma, std::move(promise)); },
-				std::ref(image), num_pass, kernel_size, sigma, std::move(promise)).detach();
-
-	return std::move(future);
-}
-*/
-
-std::future<void> gaussian_blur(image_f32& image, uint8_t num_pass, uint8_t kernel_size, float sigma = 1.f)
+std::future<void> gaussian_blur(image_f32& image, uint32_t num_pass, uint32_t kernel_size, float sigma)
 {
 	return async_apply(gaussian_blur_helper, std::ref(image), num_pass, kernel_size, sigma);
 }
@@ -116,22 +91,43 @@ static void dither_helper(image_f32& image, std::promise<void> promise)
 	const uint32_t h = image.height();
 	const uint32_t w = image.width();
 
-	// TODO(Corralx)
+	// TODO(Corralx): Figure out how to do it (see below)
 
-	promise.set_value_at_thread_exit();
+	/* Dithering example
+	const uint32_t dither_matrix[8][8] =
+	{
+		{ 0, 32, 8, 40, 2, 34, 10, 42 },
+		{ 48, 16, 56, 24, 50, 18, 58, 26 },
+		{ 12, 44, 4, 36, 14, 46, 6, 38 },	
+		{ 60, 28, 52, 20, 62, 30, 54, 22 },
+		{ 3, 35, 11, 43, 1, 33, 9, 41 },
+		{ 51, 19, 59, 27, 49, 17, 57, 25 },	
+		{ 15, 47, 7, 39, 13, 45, 5, 37 },
+		{ 63, 31, 55, 23, 61, 29, 53, 21 }
+	};
+
+	for (uint32_t i = 0; i < occlusion_map_height; ++i)
+	{
+		for (uint32_t j = 0; j < occlusion_map_width; ++j)
+		{
+			uint32_t index = i * occlusion_map_width + j;
+
+			uint32_t x = j % 8;
+			uint32_t y = i % 8;
+
+			float limit = static_cast<float>(dither_matrix[x][y] + 1) / 64.f;
+
+			float value = occlusion_map[index];
+			if (value < limit)
+				occlusion_map[index] = saturate(value + (limit / 16.f));
+			else
+				occlusion_map[index] = saturate(value - (limit / 16.f));
+		}
+	}
+	*/
+
+	promise.set_value();
 }
-
-/*
-std::future<void> dither(image_f32& image)
-{
-	std::promise<void> promise;
-	std::future<void> future;
-	std::thread([](image_f32& image, std::promise<void> promise) { dither_helper(image, std::move(promise)); },
-				std::ref(image), std::move(promise)).detach();
-
-	return std::move(future);
-}
-*/
 
 std::future<void> dither(image_f32& image)
 {

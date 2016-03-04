@@ -23,7 +23,7 @@ class path;
 
 class mesh_t
 {
-	friend std::vector<mesh_t> load_mesh(const elk::path& path);
+	friend std::vector<mesh_t> load_meshes(const elk::path& path);
 
 	mesh_t() = default;
 

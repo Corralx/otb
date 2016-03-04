@@ -10,7 +10,7 @@
 
 #include <random>
 
-std::vector<mesh_t> load_mesh(const elk::path& path)
+std::vector<mesh_t> load_meshes(const elk::path& path)
 {
 	if (path.empty() || !elk::exists(path) || path.extension() != ".obj")
 		return std::vector<mesh_t>();

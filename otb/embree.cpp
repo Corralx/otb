@@ -123,7 +123,12 @@ void context::remove_mesh(mesh_id id)
 bool context::commit()
 {
 	rtcCommit(_scene);
-	return rtcDeviceGetError(_device) == RTC_NO_ERROR;
+	return !has_error();
+}
+
+bool context::has_error()
+{
+	return rtcDeviceGetError(_device) != RTC_NO_ERROR;
 }
 
 intersect_result context::intersect(const ray& r, float max_distance, float min_distance)

@@ -49,6 +49,7 @@ public:
 	void remove_mesh(mesh_id id);
 
 	bool commit();
+	bool has_error();
 
 	intersect_result intersect(const ray& r, float max_distance, float min_distance = .0001f);
 	occluded_result occluded(const ray& r, float max_distance, float min_distance = .0001f);

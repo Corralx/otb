@@ -88,7 +88,8 @@ public:
 	{
 		return GET_PIXEL_INFO(channels);
 	}
-
+	
+	// NOTE(Corralx): Return the size in bytes
 	size_t size() const
 	{
 		return GET_PIXEL_INFO(size) * _width * _height;

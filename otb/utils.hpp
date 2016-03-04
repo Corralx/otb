@@ -16,7 +16,8 @@ namespace elk
 class path;
 }
 
-std::vector<mesh_t> load_mesh(const elk::path& path);
+// TODO(Corralx): Found a generic way to return an error
+std::vector<mesh_t> load_meshes(const elk::path& path);
 
 enum class image_extension : uint8_t
 {
@@ -25,10 +26,13 @@ enum class image_extension : uint8_t
 	TGA = 2
 };
 
+// TODO(Corralx): Make async version of file saving? Could take quite a while
 template<image_format F>
 bool write_image(const elk::path& path, const image<F>& image, image_extension ext);
 
 bool write_image(const elk::path& path, const image<image_format::F32>& image);
+
+// TODO(Corralx): Functions to convert between formats (like R32 -> U8)
 
 bool point_in_tris(const glm::vec2& p, const glm::vec2& a, const glm::vec2& b, const glm::vec2& c);
 

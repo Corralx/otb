@@ -189,23 +189,8 @@ static void generate_occlusion_helper(embree::context& ctx, const mesh_t& mesh, 
 	for (auto& w : workers)
 		w.join();
 
-	promise.set_value_at_thread_exit();
+	promise.set_value();
 }
-
-/*
-std::future<void> generate_occlusion_map(const mesh_t& mesh, occlusion_params params, image_f32& image)
-{
-	std::promise<void> promise;
-	std::future<void> future = promise.get_future();
-
-	std::thread([](const mesh_t& mesh, occlusion_params params, image_f32& image, std::promise<void> promise)
-	{
-		generate_occlusion_helper(mesh, params, image, std::move(promise));
-	}, std::ref(mesh), params, std::ref(image), std::move(promise)).detach();
-
-	return std::move(future);
-}
-*/
 
 std::future<void> generate_occlusion_map(embree::context& ctx, const mesh_t& mesh, const occlusion_params& params,
 										 const image_u32& indices_map, image_f32& image)
