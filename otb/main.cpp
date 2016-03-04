@@ -52,6 +52,7 @@ struct RTCORE_ALIGN(16) ray_mask
 	uint32_t _[8];
 };
 
+/*
 struct edge_t
 {
 	edge_t() = delete;
@@ -85,6 +86,7 @@ struct span_t
 	uint32_t x0;
 	uint32_t x1;
 };
+*/
 
 struct tile_work
 {
@@ -98,6 +100,8 @@ struct tile_work
 #ifdef _DEBUG
 static void gl_debug_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, void* userParam);
 #endif
+
+SDL_Window* window;
 
 // TODO(Corralx): Rewrite the imgui <-> SDL bridge
 // TODO(Corralx): Set up some way to disable/enable remotery when needed
@@ -140,8 +144,8 @@ int main(int, char*[])
 
 	SDL_DisplayMode current;
 	SDL_GetCurrentDisplayMode(0, &current);
-	SDL_Window *window = SDL_CreateWindow(APP_NAME, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-										  APP_WIDTH, APP_HEIGHT, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
+	window = SDL_CreateWindow(APP_NAME, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+							  APP_WIDTH, APP_HEIGHT, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
 	SDL_GLContext glcontext = SDL_GL_CreateContext(window);
 
 	gl3wInit();

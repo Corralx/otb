@@ -4,6 +4,7 @@
 #include <future>
 
 #include "image.hpp"
+#include "embree.hpp"
 
 class mesh_t;
 
@@ -34,4 +35,6 @@ struct occlusion_params
 // When the future is ready, the image contains the generated occlusion map
 /* NOTE(Corralx): Only the pixels covered by the UV unwrap are overwritten
    if a default value is needed, call initialize(...) on the image before submitting */
-std::future<void> generate_occlusion_map(const mesh_t& mesh, occlusion_params params, image<image_format::F32>& image);
+// TODO(Corralx): Pass the params by ref?
+std::future<void> generate_occlusion_map(embree::context& ctx, const mesh_t& mesh, const occlusion_params& params,
+										 const image<image_format::U32>& indices_map, image<image_format::F32>& image);

@@ -85,6 +85,8 @@ bool is_ready(const std::future<T>& f)
 }
 
 // TODO(Corralx): Check if std::ref on ref params is still needed (it shouldn't)
+// TODO(Corralx): Check that we aren't actually moving things, but just taking the ref
+// TODO(Corralx): Investigate a lighter version which uses std::async with async policy instead of std::thread
 template<typename Func, typename ...Args>
 std::future<void> async_apply(Func f, Args... args)
 {
