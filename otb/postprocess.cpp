@@ -24,6 +24,7 @@ static void invert_helper(image_f32& image, std::promise<void> promise)
 	promise.set_value_at_thread_exit();
 }
 
+/*
 std::future<void> invert(image_f32& image)
 {
 	std::promise<void> promise;
@@ -32,6 +33,12 @@ std::future<void> invert(image_f32& image)
 				std::ref(image), std::move(promise)).detach();
 
 	return std::move(future);
+}
+*/
+
+std::future<void> invert(image_f32& image)
+{
+	return async_apply(invert_helper, std::ref(image));
 }
 
 static void gaussian_blur_helper(image_f32& image, uint32_t num_pass, uint32_t kernel_size, float sigma, std::promise<void> promise)
@@ -86,6 +93,7 @@ static void gaussian_blur_helper(image_f32& image, uint32_t num_pass, uint32_t k
 	promise.set_value_at_thread_exit();
 }
 
+/*
 std::future<void> gaussian_blur(image_f32& image, uint8_t num_pass, uint8_t kernel_size, float sigma = 1.f)
 {
 	std::promise<void> promise;
@@ -95,6 +103,12 @@ std::future<void> gaussian_blur(image_f32& image, uint8_t num_pass, uint8_t kern
 				std::ref(image), num_pass, kernel_size, sigma, std::move(promise)).detach();
 
 	return std::move(future);
+}
+*/
+
+std::future<void> gaussian_blur(image_f32& image, uint8_t num_pass, uint8_t kernel_size, float sigma = 1.f)
+{
+	return async_apply(gaussian_blur_helper, std::ref(image), num_pass, kernel_size, sigma);
 }
 
 static void dither_helper(image_f32& image, std::promise<void> promise)
@@ -107,6 +121,7 @@ static void dither_helper(image_f32& image, std::promise<void> promise)
 	promise.set_value_at_thread_exit();
 }
 
+/*
 std::future<void> dither(image_f32& image)
 {
 	std::promise<void> promise;
@@ -115,4 +130,10 @@ std::future<void> dither(image_f32& image)
 				std::ref(image), std::move(promise)).detach();
 
 	return std::move(future);
+}
+*/
+
+std::future<void> dither(image_f32& image)
+{
+	return async_apply(dither_helper, std::ref(image));
 }

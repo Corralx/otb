@@ -1,5 +1,6 @@
 #include "occlusion.hpp"
 #include "mesh.hpp"
+#include "utils.hpp"
 
 #include "glm/glm.hpp"
 
@@ -21,6 +22,7 @@ static void generate_occlusion_helper(const mesh_t& mesh, occlusion_params param
 	promise.set_value_at_thread_exit();
 }
 
+/*
 std::future<void> generate_occlusion_map(const mesh_t& mesh, occlusion_params params, image_f32& image)
 {
 	std::promise<void> promise;
@@ -32,4 +34,10 @@ std::future<void> generate_occlusion_map(const mesh_t& mesh, occlusion_params pa
 	}, std::ref(mesh), params, std::ref(image), std::move(promise)).detach();
 
 	return std::move(future);
+}
+*/
+
+std::future<void> generate_occlusion_map(const mesh_t& mesh, occlusion_params params, image_f32& image)
+{
+	return async_apply(generate_occlusion_helper, std::ref(mesh), params, std::ref(image));
 }

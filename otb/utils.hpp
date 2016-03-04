@@ -7,6 +7,7 @@
 #include <future>
 #include <array>
 #include <vector>
+#include <thread>
 
 constexpr double PI = 3.14159265358979323846264338327950288;
 
@@ -81,4 +82,15 @@ bool is_ready(const std::future<T>& f)
 {
 	// NOTE(Corralx): This doesn't work for deferred future
 	return f.wait_for(0) == std::future_status::ready;
+}
+
+// TODO(Corralx): Check if std::ref on ref params is still needed (it shouldn't)
+template<typename Func, typename ...Args>
+std::future<void> async_apply(Func f, Args... args)
+{
+	std::promise<void> promise;
+	std::future<void> future = promise.get_future();
+	std::thread(f, std::forward<Args>(args)..., std::move(promise)).detach();
+
+	return future;
 }
