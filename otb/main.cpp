@@ -1,4 +1,8 @@
 #include <iostream>
+#include <chrono>
+
+using hr_clock = std::chrono::high_resolution_clock;
+using millis = std::chrono::milliseconds;
 
 #include "imgui/imgui.h"
 #include "imgui_sdl_bridge.hpp"
@@ -6,6 +10,7 @@
 #include "SDL2/SDL.h"
 #include "remotery/remotery.h"
 #include "elektra/filesystem.hpp"
+#include "chaiscript/chaiscript.hpp"
 
 #include "utils.hpp"
 #include "image.hpp"
@@ -144,10 +149,13 @@ int main(int, char*[])
 	params.tile_width = 64;
 	params.tile_height = 64;
 	params.quality = 4;
-	params.worker_num = std::min((uint8_t)8, (uint8_t)std::thread::hardware_concurrency());
+	params.worker_num = (uint8_t)std::thread::hardware_concurrency();
 
+	auto start_time = hr_clock::now();
 	generate_occlusion_map(context, shapes[mesh_index], params, indices_map, occlusion_map).get();
+	auto end_time = hr_clock::now();
 	std::cout << "Occlusion map occupies " << occlusion_map.size() << " bytes!" << std::endl;
+	std::cout << "Generation has taken " << std::chrono::duration_cast<millis>(end_time - start_time).count() << " ms!" << std::endl;
 
 	std::cout << "Postprocessing occlusion map..." << std::endl;
 	gaussian_blur(occlusion_map, 3, 3, 1.f).get();

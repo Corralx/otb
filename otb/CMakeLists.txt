@@ -63,6 +63,7 @@ include_directories (${SDL2_INCLUDE_PATH})
 include_directories (${EMBREE_INCLUDE_PATH})
 include_directories (${REMOTERY_INCLUDE_PATH})
 include_directories (${STB_INCLUDE_PATH})
+include_directories (${CHAISCRIPT_INCLUDE_PATH})
 
 add_executable (
 	otb

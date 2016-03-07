@@ -17,6 +17,7 @@ set (TINYOBJLOADER_PATH ${CMAKE_SOURCE_DIR}/external/tinyobjloader)
 set (IMGUI_PATH ${CMAKE_SOURCE_DIR}/external/imgui)
 set (REMOTERY_PATH ${CMAKE_SOURCE_DIR}/external/remotery)
 set (STB_PATH ${CMAKE_SOURCE_DIR}/external/stb)
+set (CHAISCRIPT_PATH ${CMAKE_SOURCE_DIR}/external/chaiscript)
 
 set (
 	GL3W_INCLUDE_PATH
@@ -78,6 +79,11 @@ set (
 set (
 	STB_INCLUDE_PATH
 	${STB_PATH}
+)
+
+set (
+	CHAISCRIPT_INCLUDE_PATH
+	${CHAISCRIPT_PATH}
 )
 
 add_definitions (-DRMT_USE_OPENGL)
