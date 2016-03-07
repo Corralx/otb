@@ -1,7 +1,7 @@
 #include <iostream>
 
 #include "imgui/imgui.h"
-#include "imgui_impl_sdl_gl3.hpp"
+#include "imgui_sdl_bridge.hpp"
 #include "GL/gl3w.h"
 #include "SDL2/SDL.h"
 #include "remotery/remotery.h"
@@ -18,18 +18,18 @@
 static constexpr uint32_t APP_WIDTH = 1280;
 static constexpr uint32_t APP_HEIGHT = 720;
 static constexpr char* APP_NAME = "Occlusion and Translucency Baker";
-static constexpr uint32_t MAP_SIZE = 1024;
+static constexpr uint32_t MAP_SIZE = 2048;
 static constexpr char* RESOURCE_PATH = "test/test.obj";
 
 #ifdef _DEBUG
 static void gl_debug_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, void* userParam);
 #endif
 
+// TODO(Corralx): Investigate if we want a global SDL_Window variable
 SDL_Window* window;
 
-// TODO(Corralx): Rewrite the imgui <-> SDL bridge
 // TODO(Corralx): Set up some way to disable/enable remotery when needed
-// TODO(Corralx): Investigate an ImGui file dialog
+// TODO(Corralx): Investigate an ImGui file dialog and a notification system
 int main(int, char*[])
 {
 	if (SDL_Init(SDL_INIT_VIDEO) != 0)
@@ -43,7 +43,6 @@ int main(int, char*[])
 	SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
 	SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 8);
 	SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
@@ -72,7 +71,7 @@ int main(int, char*[])
 	glDebugMessageCallback((GLDEBUGPROC)gl_debug_callback, nullptr);
 #endif
 
-	ImGui_ImplSdlGL3_Init(window);
+	imgui_init(window);
 
 	glViewport(0, 0, APP_WIDTH, APP_HEIGHT);
 	glClearColor(1.f, .0f, .0f, 1.f);
@@ -130,6 +129,7 @@ int main(int, char*[])
 	image<image_format::U32> indices_map(MAP_SIZE, MAP_SIZE);
 	indices_map.initialize(255);
 	rasterize_triangle_hardware(shapes[mesh_index], indices_map).get();
+	std::cout << "Indices map occupies " << indices_map.size() << " bytes!" << std::endl;
 
 	std::cout << "Calculating occlusion map..." << std::endl;
 	image<image_format::F32> occlusion_map(MAP_SIZE, MAP_SIZE);
@@ -143,10 +143,11 @@ int main(int, char*[])
 	params.quadratic_attenuation = 1.f;
 	params.tile_width = 64;
 	params.tile_height = 64;
-	params.quality = 8;
+	params.quality = 4;
 	params.worker_num = std::min((uint8_t)8, (uint8_t)std::thread::hardware_concurrency());
 
 	generate_occlusion_map(context, shapes[mesh_index], params, indices_map, occlusion_map).get();
+	std::cout << "Occlusion map occupies " << occlusion_map.size() << " bytes!" << std::endl;
 
 	std::cout << "Postprocessing occlusion map..." << std::endl;
 	gaussian_blur(occlusion_map, 3, 3, 1.f).get();
@@ -154,6 +155,7 @@ int main(int, char*[])
 
 	std::cout << "Saving to disk..." << std::endl;
 	write_image("maps/occlusion_map.hdr", occlusion_map);
+	std::cout << "Done!" << std::endl;
 
 	bool should_run = true;
 	while (should_run)
@@ -164,7 +166,7 @@ int main(int, char*[])
 		SDL_Event event;
 		while (SDL_PollEvent(&event))
 		{
-			ImGui_ImplSdlGL3_ProcessEvent(&event);
+			imgui_process_event(&event);
 			switch (event.type)
 			{
 				case SDL_QUIT:
@@ -188,7 +190,7 @@ int main(int, char*[])
 		// TODO: Render
 
 		rmt_BeginCPUSample(ImGuiRender);
-		ImGui_ImplSdlGL3_NewFrame();
+		imgui_new_frame();
 		{
 			static float f = 0.0f;
 			ImGui::Text("Hello, world!");
@@ -205,7 +207,7 @@ int main(int, char*[])
 	rmt_UnbindOpenGL();
 	rmt_DestroyGlobalInstance(rmt);
 
-	ImGui_ImplSdlGL3_Shutdown();
+	imgui_shutdown();
 	SDL_GL_DeleteContext(glcontext);
 	SDL_DestroyWindow(window);
 	SDL_Quit();

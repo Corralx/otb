@@ -5,28 +5,25 @@
 // https://github.com/ocornut/imgui
 
 #include "imgui/imgui.h"
-#include "imgui_impl_sdl_gl3.hpp"
+#include "imgui_sdl_bridge.hpp"
 
-// SDL,GL3W
 #include "SDL2/SDL.h"
 #include "SDL2/SDL_syswm.h"
 #include "GL/gl3w.h"
 
-// Data
-static SDL_Window*  g_Window = NULL;
+static SDL_Window*  g_Window = nullptr;
 static double       g_Time = 0.0f;
 static bool         g_MousePressed[3] = { false, false, false };
 static float        g_MouseWheel = 0.0f;
 static GLuint       g_FontTexture = 0;
 static int          g_ShaderHandle = 0, g_VertHandle = 0, g_FragHandle = 0;
 static int          g_AttribLocationTex = 0, g_AttribLocationProjMtx = 0;
-static int          g_AttribLocationPosition = 0, g_AttribLocationUV = 0, g_AttribLocationColor = 0;
 static unsigned int g_VboHandle = 0, g_VaoHandle = 0, g_ElementsHandle = 0;
 
 // This is the main rendering function that you have to implement and provide to ImGui (via setting up 'RenderDrawListsFn' in the ImGuiIO structure)
 // If text or lines are blurry when integrating ImGui in your engine:
 // - in your Render function, try translating your projection matrix by (0.5f,0.5f) or (0.375f,0.375f)
-void ImGui_ImplSdlGL3_RenderDrawLists(ImDrawData* draw_data)
+void imgui_render_drawlists(ImDrawData* draw_data)
 {
     // Backup GL state
     GLint last_program; glGetIntegerv(GL_CURRENT_PROGRAM, &last_program);
@@ -117,17 +114,17 @@ void ImGui_ImplSdlGL3_RenderDrawLists(ImDrawData* draw_data)
     glViewport(last_viewport[0], last_viewport[1], (GLsizei)last_viewport[2], (GLsizei)last_viewport[3]);
 }
 
-static const char* ImGui_ImplSdlGL3_GetClipboardText()
+static const char* imgui_get_clipboard_text()
 {
     return SDL_GetClipboardText();
 }
 
-static void ImGui_ImplSdlGL3_SetClipboardText(const char* text)
+static void imgui_set_clipboard_text(const char* text)
 {
     SDL_SetClipboardText(text);
 }
 
-bool ImGui_ImplSdlGL3_ProcessEvent(SDL_Event* event)
+bool imgui_process_event(SDL_Event* event)
 {
     ImGuiIO& io = ImGui::GetIO();
     switch (event->type)
@@ -149,7 +146,6 @@ bool ImGui_ImplSdlGL3_ProcessEvent(SDL_Event* event)
     }
     case SDL_TEXTINPUT:
     {
-        //ImGuiIO& io = ImGui::GetIO();
         io.AddInputCharactersUTF8(event->text.text);
         return true;
     }
@@ -167,7 +163,7 @@ bool ImGui_ImplSdlGL3_ProcessEvent(SDL_Event* event)
     return false;
 }
 
-void ImGui_ImplSdlGL3_CreateFontsTexture()
+void imgui_create_fonts()
 {
     // Build texture atlas
     ImGuiIO& io = ImGui::GetIO();
@@ -191,7 +187,7 @@ void ImGui_ImplSdlGL3_CreateFontsTexture()
     glBindTexture(GL_TEXTURE_2D, last_texture);
 }
 
-bool ImGui_ImplSdlGL3_CreateDeviceObjects()
+bool imgui_create_device()
 {
     // Backup GL state
     GLint last_texture, last_array_buffer, last_vertex_array;
@@ -202,9 +198,9 @@ bool ImGui_ImplSdlGL3_CreateDeviceObjects()
     const GLchar *vertex_shader =
         "#version 330\n"
         "uniform mat4 ProjMtx;\n"
-        "in vec2 Position;\n"
-        "in vec2 UV;\n"
-        "in vec4 Color;\n"
+		"layout(location = 0) in vec2 Position;\n"
+		"layout(location = 1) in vec2 UV;\n"
+		"layout(location = 2) in vec4 Color;\n"
         "out vec2 Frag_UV;\n"
         "out vec4 Frag_Color;\n"
         "void main()\n"
@@ -214,12 +210,12 @@ bool ImGui_ImplSdlGL3_CreateDeviceObjects()
         "	gl_Position = ProjMtx * vec4(Position.xy,0,1);\n"
         "}\n";
 
-    const GLchar* fragment_shader =
-        "#version 330\n"
-        "uniform sampler2D Texture;\n"
-        "in vec2 Frag_UV;\n"
-        "in vec4 Frag_Color;\n"
-        "out vec4 Out_Color;\n"
+	const GLchar* fragment_shader =
+		"#version 330\n"
+		"uniform sampler2D Texture;\n"
+		"in vec2 Frag_UV;\n"
+		"in vec4 Frag_Color;\n"
+		"layout(location = 0) out vec4 Out_Color;\n"
         "void main()\n"
         "{\n"
         "	Out_Color = Frag_Color * texture( Texture, Frag_UV.st);\n"
@@ -238,9 +234,6 @@ bool ImGui_ImplSdlGL3_CreateDeviceObjects()
 
     g_AttribLocationTex = glGetUniformLocation(g_ShaderHandle, "Texture");
     g_AttribLocationProjMtx = glGetUniformLocation(g_ShaderHandle, "ProjMtx");
-    g_AttribLocationPosition = glGetAttribLocation(g_ShaderHandle, "Position");
-    g_AttribLocationUV = glGetAttribLocation(g_ShaderHandle, "UV");
-    g_AttribLocationColor = glGetAttribLocation(g_ShaderHandle, "Color");
 
     glGenBuffers(1, &g_VboHandle);
     glGenBuffers(1, &g_ElementsHandle);
@@ -248,17 +241,17 @@ bool ImGui_ImplSdlGL3_CreateDeviceObjects()
     glGenVertexArrays(1, &g_VaoHandle);
     glBindVertexArray(g_VaoHandle);
     glBindBuffer(GL_ARRAY_BUFFER, g_VboHandle);
-    glEnableVertexAttribArray(g_AttribLocationPosition);
-    glEnableVertexAttribArray(g_AttribLocationUV);
-    glEnableVertexAttribArray(g_AttribLocationColor);
+    glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
+    glEnableVertexAttribArray(2);
 
 #define OFFSETOF(TYPE, ELEMENT) ((size_t)&(((TYPE *)0)->ELEMENT))
-    glVertexAttribPointer(g_AttribLocationPosition, 2, GL_FLOAT, GL_FALSE, sizeof(ImDrawVert), (GLvoid*)OFFSETOF(ImDrawVert, pos));
-    glVertexAttribPointer(g_AttribLocationUV, 2, GL_FLOAT, GL_FALSE, sizeof(ImDrawVert), (GLvoid*)OFFSETOF(ImDrawVert, uv));
-    glVertexAttribPointer(g_AttribLocationColor, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(ImDrawVert), (GLvoid*)OFFSETOF(ImDrawVert, col));
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(ImDrawVert), (GLvoid*)OFFSETOF(ImDrawVert, pos));
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(ImDrawVert), (GLvoid*)OFFSETOF(ImDrawVert, uv));
+    glVertexAttribPointer(2, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(ImDrawVert), (GLvoid*)OFFSETOF(ImDrawVert, col));
 #undef OFFSETOF
 
-    ImGui_ImplSdlGL3_CreateFontsTexture();
+    imgui_create_fonts();
 
     // Restore modified GL state
     glBindTexture(GL_TEXTURE_2D, last_texture);
@@ -268,7 +261,7 @@ bool ImGui_ImplSdlGL3_CreateDeviceObjects()
     return true;
 }
 
-void    ImGui_ImplSdlGL3_InvalidateDeviceObjects()
+void imgui_invalidate_device()
 {
     if (g_VaoHandle) glDeleteVertexArrays(1, &g_VaoHandle);
     if (g_VboHandle) glDeleteBuffers(1, &g_VboHandle);
@@ -294,7 +287,7 @@ void    ImGui_ImplSdlGL3_InvalidateDeviceObjects()
     }
 }
 
-bool    ImGui_ImplSdlGL3_Init(SDL_Window *window)
+bool imgui_init(SDL_Window *window)
 {
     g_Window = window;
     
@@ -319,9 +312,9 @@ bool    ImGui_ImplSdlGL3_Init(SDL_Window *window)
     io.KeyMap[ImGuiKey_Y] = SDLK_y;
     io.KeyMap[ImGuiKey_Z] = SDLK_z;
 
-    io.RenderDrawListsFn = ImGui_ImplSdlGL3_RenderDrawLists;   // Alternatively you can set this to NULL and call ImGui::GetDrawData() after ImGui::Render() to get the same ImDrawData pointer.
-    io.SetClipboardTextFn = ImGui_ImplSdlGL3_SetClipboardText;
-    io.GetClipboardTextFn = ImGui_ImplSdlGL3_GetClipboardText;
+    io.RenderDrawListsFn = imgui_render_drawlists;   // Alternatively you can set this to NULL and call ImGui::GetDrawData() after ImGui::Render() to get the same ImDrawData pointer.
+    io.SetClipboardTextFn = imgui_set_clipboard_text;
+    io.GetClipboardTextFn = imgui_get_clipboard_text;
 
 #ifdef _WIN32
     SDL_SysWMinfo wmInfo;
@@ -333,16 +326,16 @@ bool    ImGui_ImplSdlGL3_Init(SDL_Window *window)
     return true;
 }
 
-void ImGui_ImplSdlGL3_Shutdown()
+void imgui_shutdown()
 {
-    ImGui_ImplSdlGL3_InvalidateDeviceObjects();
+    imgui_invalidate_device();
     ImGui::Shutdown();
 }
 
-void ImGui_ImplSdlGL3_NewFrame()
+void imgui_new_frame()
 {
     if (!g_FontTexture)
-        ImGui_ImplSdlGL3_CreateDeviceObjects();
+        imgui_create_device();
 
     ImGuiIO& io = ImGui::GetIO();
 

@@ -7,11 +7,10 @@
 struct SDL_Window;
 typedef union SDL_Event SDL_Event;
 
-bool        ImGui_ImplSdlGL3_Init(SDL_Window *window);
-void        ImGui_ImplSdlGL3_Shutdown();
-void        ImGui_ImplSdlGL3_NewFrame();
-bool        ImGui_ImplSdlGL3_ProcessEvent(SDL_Event* event);
+bool        imgui_init(SDL_Window* window);
+void        imgui_shutdown();
+void        imgui_new_frame();
+bool        imgui_process_event(SDL_Event* event);
 
-// Use if you want to reset your rendering device without losing ImGui state.
-void        ImGui_ImplSdlGL3_InvalidateDeviceObjects();
-bool        ImGui_ImplSdlGL3_CreateDeviceObjects();
+void        imgui_invalidate_device();
+bool        imgui_create_device();

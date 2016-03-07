@@ -6,8 +6,6 @@
 #include "SDL2/SDL.h"
 #include "glm/glm.hpp"
 
-// TODO(Corralx): Implement the functions
-
 using image_u32 = image<image_format::U32>;
 
 extern SDL_Window* window;

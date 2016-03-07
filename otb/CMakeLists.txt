@@ -10,7 +10,7 @@ set (
 	occlusion.cpp
 	rasterizer.cpp
 	postprocess.cpp
-	imgui_impl_sdl_gl3.cpp
+	imgui_sdl_bridge.cpp
 )
 
 set (
@@ -22,7 +22,7 @@ set (
 	occlusion.hpp
 	rasterizer.hpp
 	postprocess.hpp
-	imgui_impl_sdl_gl3.hpp
+	imgui_sdl_bridge.hpp
 )
 
 set (
@@ -68,7 +68,6 @@ add_executable (
 	otb
 	${SRC}
 	${HEADER}
-	${COMMON}
 )
 
 set (
