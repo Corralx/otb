@@ -10,6 +10,8 @@ using millis = std::chrono::milliseconds;
 #include "SDL2/SDL.h"
 #include "remotery/remotery.h"
 #include "elektra/filesystem.hpp"
+#include "elektra/machine_specs.hpp"
+
 /*
 #include "chaiscript/chaiscript.hpp"
 #include "chaiscript/chaiscript_stdlib.hpp"
@@ -50,7 +52,7 @@ int main(int, char*[])
 
 	if (SDL_Init(SDL_INIT_VIDEO) != 0)
 	{
-		std::cout << "SDL initialization error: " << SDL_GetError() << std::endl;
+		std::cerr << "SDL initialization error: " << SDL_GetError() << std::endl;
 		return 1;
 	}
 
@@ -160,7 +162,7 @@ int main(int, char*[])
 	params.tile_width = 64;
 	params.tile_height = 64;
 	params.quality = 4;
-	params.worker_num = (uint8_t)std::thread::hardware_concurrency();
+	params.worker_num = (uint8_t)elk::number_of_cores();
 
 	auto start_time = hr_clock::now();
 	generate_occlusion_map(context, shapes[mesh_index], params, indices_map, occlusion_map).get();

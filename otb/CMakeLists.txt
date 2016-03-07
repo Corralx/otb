@@ -69,6 +69,7 @@ add_executable (
 	otb
 	${SRC}
 	${HEADER}
+	${COMMON}
 )
 
 set (
