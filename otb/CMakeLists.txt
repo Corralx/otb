@@ -92,7 +92,7 @@ target_link_libraries (
 	${EMBREE_LIB_PATH}/embree.lib
 )
 
-set (MSVC_OPTIONS /MP /arch:AVX2)
+set (MSVC_OPTIONS /MP /arch:AVX2 /bigobj)
 set (GNU_OPTIONS -std=c++11 -arch=core-avx2)
 set (CLANG_OPTIONS -std=c++11 -arch=core-avx2)
 

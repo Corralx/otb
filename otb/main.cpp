@@ -10,7 +10,10 @@ using millis = std::chrono::milliseconds;
 #include "SDL2/SDL.h"
 #include "remotery/remotery.h"
 #include "elektra/filesystem.hpp"
+/*
 #include "chaiscript/chaiscript.hpp"
+#include "chaiscript/chaiscript_stdlib.hpp"
+*/
 
 #include "utils.hpp"
 #include "image.hpp"
@@ -37,6 +40,14 @@ SDL_Window* window;
 // TODO(Corralx): Investigate an ImGui file dialog and a notification system
 int main(int, char*[])
 {
+	/*
+	chaiscript::ChaiScript chai(chaiscript::Std_Lib::library());
+	chai.add(chaiscript::fun(&helloWorld),
+			 "helloWorld");
+
+	chai.eval("helloWorld(\"Bob\");");
+	*/
+
 	if (SDL_Init(SDL_INIT_VIDEO) != 0)
 	{
 		std::cout << "SDL initialization error: " << SDL_GetError() << std::endl;
@@ -155,7 +166,7 @@ int main(int, char*[])
 	generate_occlusion_map(context, shapes[mesh_index], params, indices_map, occlusion_map).get();
 	auto end_time = hr_clock::now();
 	std::cout << "Occlusion map occupies " << occlusion_map.size() << " bytes!" << std::endl;
-	std::cout << "Generation has taken " << std::chrono::duration_cast<millis>(end_time - start_time).count() << " ms!" << std::endl;
+	std::cout << "Calculation has taken " << std::chrono::duration_cast<millis>(end_time - start_time).count() << " ms!" << std::endl;
 
 	std::cout << "Postprocessing occlusion map..." << std::endl;
 	gaussian_blur(occlusion_map, 3, 3, 1.f).get();
