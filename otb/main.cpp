@@ -29,7 +29,7 @@ static constexpr uint32_t APP_WIDTH = 1280;
 static constexpr uint32_t APP_HEIGHT = 720;
 static constexpr char* APP_NAME = "Occlusion and Translucency Baker";
 static constexpr uint32_t MAP_SIZE = 2048;
-static constexpr char* RESOURCE_PATH = "test/test.obj";
+static constexpr char* RESOURCE_PATH = "resources/meshes/armor.obj";
 
 #ifdef _DEBUG
 static void gl_debug_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, void* userParam);
@@ -38,8 +38,9 @@ static void gl_debug_callback(GLenum source, GLenum type, GLuint id, GLenum seve
 // TODO(Corralx): Investigate if we want a global SDL_Window variable
 SDL_Window* window;
 
-// TODO(Corralx): Set up some way to disable/enable remotery when needed
+// TODO(Corralx): Set up some way to disable/enable remotery when needed (RMT_ENABLED already present though)
 // TODO(Corralx): Investigate an ImGui file dialog and a notification system
+// TODO(Corralx): Load configuration from file with all resources path
 int main(int, char*[])
 {
 	/*
@@ -95,6 +96,13 @@ int main(int, char*[])
 	glClearColor(1.f, .0f, .0f, 1.f);
 	SDL_GL_SetSwapInterval(0);
 
+	auto base_program = load_program("resources/shaders/base.vs", "resources/shaders/base.fs");
+	if (!base_program)
+	{
+		std::cerr << "Error while loading the base program!" << std::endl;
+		return 1;
+	}
+
 	rmtSettings* settings = rmt_Settings();
 	settings->input_handler_context = nullptr;
 	settings->input_handler = [](const char* text, void*)
@@ -144,18 +152,18 @@ int main(int, char*[])
 	const uint32_t mesh_index = 0;
 
 	std::cout << "Rasterizing UVs..." << std::endl;
-	image<image_format::U32> indices_map(MAP_SIZE, MAP_SIZE);
-	indices_map.initialize(255);
+	image<pixel_format::U32> indices_map(MAP_SIZE, MAP_SIZE);
+	indices_map.reset(255);
 	rasterize_triangle_hardware(shapes[mesh_index], indices_map).get();
-	std::cout << "Indices map occupies " << indices_map.size() << " bytes!" << std::endl;
+	std::cout << "Indices map occupies " << indices_map.memory() << " bytes!" << std::endl;
 
 	std::cout << "Calculating occlusion map..." << std::endl;
-	image<image_format::F32> occlusion_map(MAP_SIZE, MAP_SIZE);
-	occlusion_map.initialize(0);
+	image<pixel_format::F32> occlusion_map(MAP_SIZE, MAP_SIZE);
+	occlusion_map.reset(0);
 
 	occlusion_params params{};
 	params.min_distance = .0001f;
-	params.max_distance = 15.f;
+	params.max_distance = 5.f;
 	params.smooth_normal_interpolation = true;
 	params.linear_attenuation = 1.f;
 	params.quadratic_attenuation = 1.f;
@@ -167,7 +175,7 @@ int main(int, char*[])
 	auto start_time = hr_clock::now();
 	generate_occlusion_map(context, shapes[mesh_index], params, indices_map, occlusion_map).get();
 	auto end_time = hr_clock::now();
-	std::cout << "Occlusion map occupies " << occlusion_map.size() << " bytes!" << std::endl;
+	std::cout << "Occlusion map occupies " << occlusion_map.memory() << " bytes!" << std::endl;
 	std::cout << "Calculation has taken " << std::chrono::duration_cast<millis>(end_time - start_time).count() << " ms!" << std::endl;
 
 	std::cout << "Postprocessing occlusion map..." << std::endl;
@@ -175,7 +183,7 @@ int main(int, char*[])
 	invert(occlusion_map).get();
 
 	std::cout << "Saving to disk..." << std::endl;
-	write_image("maps/occlusion_map.hdr", occlusion_map);
+	write_image("output/occlusion_map.hdr", occlusion_map);
 	std::cout << "Done!" << std::endl;
 
 	bool should_run = true;

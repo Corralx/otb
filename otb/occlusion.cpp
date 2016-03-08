@@ -11,8 +11,8 @@
 #include <vector>
 #include <cstdint>
 
-using image_f32 = image<image_format::F32>;
-using image_u32 = image<image_format::U32>;
+using image_f32 = image<pixel_format::F32>;
+using image_u32 = image<pixel_format::U32>;
 
 struct image_tile
 {

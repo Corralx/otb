@@ -18,6 +18,7 @@ set (IMGUI_PATH ${CMAKE_SOURCE_DIR}/external/imgui)
 set (REMOTERY_PATH ${CMAKE_SOURCE_DIR}/external/remotery)
 set (STB_PATH ${CMAKE_SOURCE_DIR}/external/stb)
 set (CHAISCRIPT_PATH ${CMAKE_SOURCE_DIR}/external/chaiscript)
+set (RAPIDJSON_PATH ${CMAKE_SOURCE_DIR}/external/rapidjson)
 
 set (
 	GL3W_INCLUDE_PATH
@@ -84,6 +85,11 @@ set (
 set (
 	CHAISCRIPT_INCLUDE_PATH
 	${CHAISCRIPT_PATH}
+)
+
+set (
+	RAPIDJSON_INCLUDE_PATH
+	${RAPIDJSON_PATH}
 )
 
 add_definitions (-DRMT_USE_OPENGL)

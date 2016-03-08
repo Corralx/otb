@@ -32,7 +32,7 @@ public:
 	mesh_t(mesh_t&&) = default;
 	mesh_t& operator=(const mesh_t&) = delete;
 	mesh_t& operator=(mesh_t&&) = default;
-	~mesh_t() = default;
+	~mesh_t();
 
 	const std::vector<vertex_t>& vertices() const
 	{
@@ -59,4 +59,10 @@ private:
 	std::vector<normal_t> _normals;
 	std::vector<texture_coord_t> _coords;
 	std::vector<face_t> _faces;
+
+	uint32_t _vao;
+	uint32_t _buffers[4];
+
+	// TODO(Corralx): A mesh should not know how to create gl buffers
+	void init_buffers();
 };

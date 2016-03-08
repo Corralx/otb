@@ -2,6 +2,8 @@
 
 #include "tinyobjloader/tiny_obj_loader.h"
 #include "elektra/filesystem.hpp"
+#include "elektra/file_io.hpp"
+#include "GL/gl3w.h"
 
 #pragma warning (push, 0)
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -10,6 +12,8 @@
 
 #include <random>
 
+// TODO(Corralx): having an additional shared context to load resource asynchronously
+// NOTE(Corralx): Vertex Array Objects are not shared between context though!
 std::vector<mesh_t> load_meshes(const elk::path& path)
 {
 	if (path.empty() || !elk::exists(path) || path.extension() != ".obj")
@@ -50,14 +54,49 @@ std::vector<mesh_t> load_meshes(const elk::path& path)
 		mesh._faces.resize(num_tris);
 		memcpy(mesh._faces.data(), tiny_mesh.indices.data(), sizeof(face_t) * num_tris);
 
+		mesh.init_buffers();
+
 		meshes.push_back(std::move(mesh));
 	}
 
 	return std::move(meshes);
 }
 
+// TODO(Corralx): Load resource asynchronously
+// NOTE(Corralx): An OpenGL context must be bound to the current thread for this to work
+elk::optional<uint32_t> load_program(const elk::path& vs_path, const elk::path& fs_path)
+{
+	auto vs_source = elk::get_content_of_file(vs_path);
+	auto fs_source = elk::get_content_of_file(fs_path);
+
+	if (!vs_source || !fs_source)
+		return elk::nullopt;
+
+	const char* vs_ptr = vs_source.value().c_str();
+	uint32_t vs = glCreateShader(GL_VERTEX_SHADER);
+	glShaderSource(vs, 1, &vs_ptr, nullptr);
+	glCompileShader(vs);
+
+	const char* fs_ptr = fs_source.value().c_str();
+	uint32_t fs = glCreateShader(GL_FRAGMENT_SHADER);
+	glShaderSource(fs, 1, &fs_ptr, nullptr);
+	glCompileShader(fs);
+
+	uint32_t program = glCreateProgram();
+	glAttachShader(program, vs);
+	glAttachShader(program, fs);
+	glLinkProgram(program);
+
+	assert(glGetError() == GL_NO_ERROR);
+
+	glDeleteShader(vs);
+	glDeleteShader(fs);
+
+	return program;
+}
+
 template<>
-bool write_image(const elk::path& path, const image<image_format::U8>& image, image_extension ext)
+bool write_image(const elk::path& path, const image<pixel_format::U8>& image, image_extension ext)
 {
 	assert(image.width() > 0);
 	assert(image.height() > 0);
@@ -81,7 +120,7 @@ bool write_image(const elk::path& path, const image<image_format::U8>& image, im
 	return false;
 }
 
-bool write_image(const elk::path& path, const image<image_format::F32>& image)
+bool write_image(const elk::path& path, const image<pixel_format::F32>& image)
 {
 	assert(image.width() > 0);
 	assert(image.height() > 0);

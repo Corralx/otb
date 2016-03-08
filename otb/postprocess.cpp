@@ -3,7 +3,7 @@
 
 #include <thread>
 
-using image_f32 = image<image_format::F32>;
+using image_f32 = image<pixel_format::F32>;
 
 static void invert_helper(image_f32& image, std::promise<void> promise)
 {

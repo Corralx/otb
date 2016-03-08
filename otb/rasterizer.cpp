@@ -6,10 +6,11 @@
 #include "SDL2/SDL.h"
 #include "glm/glm.hpp"
 
-using image_u32 = image<image_format::U32>;
+using image_u32 = image<pixel_format::U32>;
 
 extern SDL_Window* window;
 
+// TODO(Corralx): Load the shaders from file?
 static void rasterize_hardware_helper(const mesh_t& mesh, image_u32& image, std::promise<void> promise)
 {
 	static auto context = SDL_GL_CreateContext(window);

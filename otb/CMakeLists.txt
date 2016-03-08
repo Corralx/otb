@@ -2,6 +2,9 @@ cmake_minimum_required (VERSION 3.0.2)
 
 project (otb CXX)
 
+set (RESOURCES_DIR "${CMAKE_SOURCE_DIR}/resources")
+set (SHADER_DIR "${RESOURCES_DIR}/shaders")
+
 set (
 	SRC
 	main.cpp
@@ -10,6 +13,7 @@ set (
 	occlusion.cpp
 	rasterizer.cpp
 	postprocess.cpp
+	mesh.cpp
 	imgui_sdl_bridge.cpp
 )
 
@@ -33,6 +37,12 @@ set (
 )
 
 set (
+	SHADER
+	${SHADER_DIR}/base.vs
+	${SHADER_DIR}/base.fs
+)
+
+set (
 	ALL_FILES
 	${SRC}
 	${HEADER}
@@ -52,6 +62,8 @@ foreach (FILE ${ALL_FILES})
   source_group ("${GROUP}" FILES "${FILE}")
 endforeach ()
 
+source_group ("Resources" FILES ${SHADER})
+
 include_directories (${ELEKTRA_INCLUDE_PATH})
 include_directories (${GL3W_INCLUDE_PATH})
 include_directories (${GLM_INCLUDE_PATH})
@@ -64,12 +76,14 @@ include_directories (${EMBREE_INCLUDE_PATH})
 include_directories (${REMOTERY_INCLUDE_PATH})
 include_directories (${STB_INCLUDE_PATH})
 include_directories (${CHAISCRIPT_INCLUDE_PATH})
+include_directories (${RAPIDJSON_INCLUDE_PATH})
 
 add_executable (
 	otb
 	${SRC}
 	${HEADER}
 	${COMMON}
+	${SHADER}
 )
 
 set (
@@ -119,3 +133,7 @@ set_property (TARGET otb PROPERTY LINK_FLAGS "/INCREMENTAL:NO")
 
 set_property (TARGET otb PROPERTY RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin")
 set_property (TARGET otb PROPERTY PDB_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/lib")
+
+add_custom_command(TARGET otb POST_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E copy_directory
+                   ${RESOURCES_DIR} $<TARGET_FILE_DIR:otb>/resources)

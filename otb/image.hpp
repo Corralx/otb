@@ -5,7 +5,7 @@
 #include <cstring>
 
 // TODO(Corralx): Eventually add other formats and storages
-enum class image_format : uint8_t
+enum class pixel_format : uint8_t
 {
 	U8 = 0,
 	F32 = 1,
@@ -15,43 +15,30 @@ enum class image_format : uint8_t
 namespace detail
 {
 
-template<image_format>
-struct format_to_pixel_info
-{
-};
+template<pixel_format>
+struct format_to_pixel_info{};
 
-template<>
-struct format_to_pixel_info<image_format::U8>
-{
-	using type = uint8_t;
+#define DECLARE_PIXEL_INFO(_value, _type, _channels) \
+template<> \
+struct format_to_pixel_info<pixel_format::_value> \
+{ \
+	using type = _type;	\
+\
+	static const uint8_t channels = _channels; \
+	static const size_t size = channels * sizeof(_type); \
+}
 
-	static const uint8_t channels = 1;
-	static const size_t size = channels * sizeof(uint8_t);
-};
+DECLARE_PIXEL_INFO(U8, uint8_t, 1);
+DECLARE_PIXEL_INFO(F32, float, 1);
+DECLARE_PIXEL_INFO(U32, uint32_t, 1);
 
-template<>
-struct format_to_pixel_info<image_format::F32>
-{
-	using type = float;
-
-	static const uint8_t channels = 1;
-	static const size_t size = channels * sizeof(float);
-};
-
-template<>
-struct format_to_pixel_info<image_format::U32>
-{
-	using type = uint32_t;
-
-	static const uint8_t channels = 1;
-	static const size_t size = channels * sizeof(uint32_t);
-};
+#undef DECLARE_PIXEL_INFO
 
 }
 
 #define GET_PIXEL_INFO(info) typename detail::format_to_pixel_info<F>::info
 
-template<image_format F>
+template<pixel_format F>
 class image
 {
 	using Format = GET_PIXEL_INFO(type);
@@ -74,12 +61,12 @@ public:
 		delete[] _data;
 	}
 
-	void initialize(uint8_t val)
+	void reset(uint8_t val)
 	{
-		memset(_data, val, size());
+		memset(_data, val, memory());
 	}
 
-	image_format format() const
+	pixel_format format() const
 	{
 		return F;
 	}
@@ -89,8 +76,8 @@ public:
 		return GET_PIXEL_INFO(channels);
 	}
 	
-	// NOTE(Corralx): Return the size in bytes
-	size_t size() const
+	// NOTE(Corralx): Return the memory in bytes
+	size_t memory() const
 	{
 		return GET_PIXEL_INFO(size) * _width * _height;
 	}
