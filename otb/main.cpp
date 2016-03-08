@@ -204,7 +204,7 @@ int main(int, char*[])
 	write_image(global_config.output_path / "occlusion_map.hdr", occlusion_map);
 	std::cout << "Done!" << std::endl;
 
-	glm::mat4 proj_matrix = glm::perspective(45.f, (float)APP_WIDTH / (float)APP_HEIGHT, 1.f, 1000.f);
+	glm::mat4 proj_matrix = glm::perspective(glm::radians(45.f), (float)APP_WIDTH / (float)APP_HEIGHT, 1.f, 1000.f);
 	glm::mat4 view_matrix = glm::lookAt(glm::vec3(.0f, .0f, 5.f), glm::vec3(.0f, .0f, -5.f), glm::vec3(.0f, 1.f, .0f));
 
 	bool should_run = true;
