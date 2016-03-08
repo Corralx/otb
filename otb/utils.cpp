@@ -87,10 +87,10 @@ elk::optional<uint32_t> load_program(const elk::path& vs_path, const elk::path& 
 	glAttachShader(program, fs);
 	glLinkProgram(program);
 
-	assert(glGetError() == GL_NO_ERROR);
-
 	glDeleteShader(vs);
 	glDeleteShader(fs);
+
+	assert(glGetError() == GL_NO_ERROR);
 
 	return program;
 }

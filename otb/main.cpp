@@ -32,6 +32,8 @@ using millis = std::chrono::milliseconds;
 static constexpr uint32_t APP_WIDTH = 1280;
 static constexpr uint32_t APP_HEIGHT = 720;
 static constexpr char* APP_NAME = "Occlusion and Translucency Baker";
+static constexpr uint32_t OPENGL_MAJOR_VERSION = 3;
+static constexpr uint32_t OPENGL_MINOR_VERSION = 3;
 static constexpr uint32_t MAP_SIZE = 256;
 static constexpr char* CONFIG_FILENAME = "resources/config.json";
 
@@ -77,8 +79,8 @@ int main(int, char*[])
 	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 	SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, OPENGL_MAJOR_VERSION);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, OPENGL_MINOR_VERSION);
 
 #ifdef _DEBUG
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG |
@@ -111,7 +113,7 @@ int main(int, char*[])
 	glClearColor(1.f, .0f, .0f, 1.f);
 	SDL_GL_SetSwapInterval(0);
 
-	auto base_program = load_program("resources/shaders/base.vs", "resources/shaders/base.fs");
+	auto base_program = load_program(global_config.shader_path / "base.vs", global_config.shader_path / "base.fs");
 	if (!base_program)
 	{
 		std::cerr << "Error while loading the base program!" << std::endl;
@@ -168,7 +170,8 @@ int main(int, char*[])
 	}
 
 	const uint32_t mesh_index = 0;
-
+	
+	/*
 	std::cout << "Rasterizing UVs..." << std::endl;
 	image<pixel_format::U32> indices_map(MAP_SIZE, MAP_SIZE);
 	indices_map.reset(255);
@@ -203,9 +206,10 @@ int main(int, char*[])
 	std::cout << "Saving to disk..." << std::endl;
 	write_image(global_config.output_path / "occlusion_map.hdr", occlusion_map);
 	std::cout << "Done!" << std::endl;
+	*/
 
 	glm::mat4 proj_matrix = glm::perspective(glm::radians(45.f), (float)APP_WIDTH / (float)APP_HEIGHT, 1.f, 1000.f);
-	glm::mat4 view_matrix = glm::lookAt(glm::vec3(.0f, .0f, 5.f), glm::vec3(.0f, .0f, -5.f), glm::vec3(.0f, 1.f, .0f));
+	glm::mat4 view_matrix = glm::lookAt(glm::vec3(.0f, .0f, 5.f), glm::vec3(.0f, .0f, 0.f), glm::vec3(.0f, 1.f, .0f));
 
 	bool should_run = true;
 	while (should_run)
@@ -234,7 +238,7 @@ int main(int, char*[])
 		// TODO: Update
 
 		rmt_BeginCPUSample(BufferClear);
-		glClear(GL_COLOR_BUFFER_BIT);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		rmt_EndCPUSample();
 
 		rmt_BeginCPUSample(SceneRender);
@@ -244,7 +248,8 @@ int main(int, char*[])
 		glUniformMatrix4fv(view_location, 1, GL_FALSE, glm::value_ptr(view_matrix));
 		glDrawElements(GL_TRIANGLES, (uint32_t)shapes[mesh_index].faces().size() * 3, GL_UNSIGNED_INT, nullptr);
 		rmt_EndCPUSample();
-
+		assert(glGetError() == GL_NO_ERROR);
+		
 		rmt_BeginCPUSample(ImGuiRender);
 		imgui_new_frame();
 		{

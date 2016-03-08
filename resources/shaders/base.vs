@@ -1,8 +1,8 @@
 #version 330 core
 
-layout(location = 0) vec3 position;
-layout(location = 1) vec3 normal;
-layout(location = 2) vec2 coords;
+layout(location = 0) in vec3 position;
+layout(location = 1) in vec3 normal;
+layout(location = 2) in vec2 coords;
 
 uniform mat4 proj;
 uniform mat4 view;
