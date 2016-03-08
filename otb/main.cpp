@@ -11,6 +11,9 @@ using millis = std::chrono::milliseconds;
 #include "remotery/remotery.h"
 #include "elektra/filesystem.hpp"
 #include "elektra/machine_specs.hpp"
+#include "glm/glm.hpp"
+#include "glm/gtc/matrix_transform.hpp"
+#include "glm/gtc/type_ptr.hpp"
 
 /*
 #include "chaiscript/chaiscript.hpp"
@@ -29,7 +32,7 @@ using millis = std::chrono::milliseconds;
 static constexpr uint32_t APP_WIDTH = 1280;
 static constexpr uint32_t APP_HEIGHT = 720;
 static constexpr char* APP_NAME = "Occlusion and Translucency Baker";
-static constexpr uint32_t MAP_SIZE = 2048;
+static constexpr uint32_t MAP_SIZE = 256;
 static constexpr char* CONFIG_FILENAME = "resources/config.json";
 
 #ifdef _DEBUG
@@ -39,9 +42,7 @@ static void gl_debug_callback(GLenum source, GLenum type, GLuint id, GLenum seve
 // TODO(Corralx): Investigate if we want a global SDL_Window variable
 SDL_Window* window;
 
-// TODO(Corralx): Set up some way to disable/enable remotery when needed (RMT_ENABLED already present though)
 // TODO(Corralx): Investigate an ImGui file dialog and a notification system
-// TODO(Corralx): Load configuration from file with all resources path
 int main(int, char*[])
 {
 	/*
@@ -102,6 +103,10 @@ int main(int, char*[])
 
 	imgui_init(window);
 
+	glEnable(GL_DEPTH_TEST);
+	glDisable(GL_STENCIL_TEST);
+	glEnable(GL_CULL_FACE);
+	glCullFace(GL_BACK);
 	glViewport(0, 0, APP_WIDTH, APP_HEIGHT);
 	glClearColor(1.f, .0f, .0f, 1.f);
 	SDL_GL_SetSwapInterval(0);
@@ -112,6 +117,8 @@ int main(int, char*[])
 		std::cerr << "Error while loading the base program!" << std::endl;
 		return 1;
 	}
+	int32_t proj_location = glGetUniformLocation(base_program.value(), "proj");
+	int32_t view_location = glGetUniformLocation(base_program.value(), "view");
 
 	rmtSettings* settings = rmt_Settings();
 	settings->input_handler_context = nullptr;
@@ -125,7 +132,7 @@ int main(int, char*[])
 	rmt_BindOpenGL();
 
 	std::cout << "Loading meshes..." << std::endl;
-	elk::path mesh_path("resources/meshes/armor.obj");
+	elk::path mesh_path("resources/meshes/crate.obj");
 	auto shapes = load_meshes(mesh_path);
 	if (shapes.empty())
 	{
@@ -180,7 +187,7 @@ int main(int, char*[])
 	params.quadratic_attenuation = 1.f;
 	params.tile_width = 64;
 	params.tile_height = 64;
-	params.quality = 4;
+	params.quality = 1;
 	params.worker_num = (uint8_t)elk::number_of_cores();
 
 	auto start_time = hr_clock::now();
@@ -190,12 +197,15 @@ int main(int, char*[])
 	std::cout << "Calculation has taken " << std::chrono::duration_cast<millis>(end_time - start_time).count() << " ms!" << std::endl;
 
 	std::cout << "Postprocessing occlusion map..." << std::endl;
-	gaussian_blur(occlusion_map, 3, 3, 1.f).get();
+	gaussian_blur(occlusion_map, 1, 3, 1.f).get();
 	invert(occlusion_map).get();
 
 	std::cout << "Saving to disk..." << std::endl;
 	write_image(global_config.output_path / "occlusion_map.hdr", occlusion_map);
 	std::cout << "Done!" << std::endl;
+
+	glm::mat4 proj_matrix = glm::perspective(45.f, (float)APP_WIDTH / (float)APP_HEIGHT, 1.f, 1000.f);
+	glm::mat4 view_matrix = glm::lookAt(glm::vec3(.0f, .0f, 5.f), glm::vec3(.0f, .0f, -5.f), glm::vec3(.0f, 1.f, .0f));
 
 	bool should_run = true;
 	while (should_run)
@@ -227,7 +237,13 @@ int main(int, char*[])
 		glClear(GL_COLOR_BUFFER_BIT);
 		rmt_EndCPUSample();
 
-		// TODO: Render
+		rmt_BeginCPUSample(SceneRender);
+		glBindVertexArray(shapes[mesh_index]._vao);
+		glUseProgram(base_program.value());
+		glUniformMatrix4fv(proj_location, 1, GL_FALSE, glm::value_ptr(proj_matrix));
+		glUniformMatrix4fv(view_location, 1, GL_FALSE, glm::value_ptr(view_matrix));
+		glDrawElements(GL_TRIANGLES, (uint32_t)shapes[mesh_index].faces().size() * 3, GL_UNSIGNED_INT, nullptr);
+		rmt_EndCPUSample();
 
 		rmt_BeginCPUSample(ImGuiRender);
 		imgui_new_frame();

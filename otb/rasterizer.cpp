@@ -11,6 +11,7 @@ using image_u32 = image<pixel_format::U32>;
 extern SDL_Window* window;
 
 // TODO(Corralx): Load the shaders from file?
+// TODO(Corralx): Think about a generic way of doing gl related things asynchronously
 static void rasterize_hardware_helper(const mesh_t& mesh, image_u32& image, std::promise<void> promise)
 {
 	static auto context = SDL_GL_CreateContext(window);
@@ -172,9 +173,7 @@ struct span_t
 	uint32_t x0;
 	uint32_t x1;
 };
-*/
 
-/*
 uint32_t* indices_map;
 {
 	const uint8_t ssaa_scale = 2;

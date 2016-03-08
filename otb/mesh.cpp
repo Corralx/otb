@@ -4,9 +4,7 @@
 
 mesh_t::~mesh_t()
 {
-	// Release gl resources if any
-	glDeleteBuffers(4, _buffers);
-	glDeleteVertexArrays(1, &_vao);
+	// TODO(Corralx): Release gl resources if any
 }
 
 void mesh_t::init_buffers()
