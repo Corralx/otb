@@ -4,6 +4,7 @@ project (otb CXX)
 
 set (RESOURCES_DIR "${CMAKE_SOURCE_DIR}/resources")
 set (SHADER_DIR "${RESOURCES_DIR}/shaders")
+set (CONFIG_FILE "${RESOURCES_DIR}/config.json")
 
 set (
 	SRC
@@ -14,6 +15,7 @@ set (
 	rasterizer.cpp
 	postprocess.cpp
 	mesh.cpp
+	configuration.cpp
 	imgui_sdl_bridge.cpp
 )
 
@@ -26,6 +28,7 @@ set (
 	occlusion.hpp
 	rasterizer.hpp
 	postprocess.hpp
+	configuration.hpp
 	imgui_sdl_bridge.hpp
 )
 
@@ -62,7 +65,7 @@ foreach (FILE ${ALL_FILES})
   source_group ("${GROUP}" FILES "${FILE}")
 endforeach ()
 
-source_group ("Resources" FILES ${SHADER})
+source_group ("Resources" FILES ${SHADER} ${CONFIG_FILE})
 
 include_directories (${ELEKTRA_INCLUDE_PATH})
 include_directories (${GL3W_INCLUDE_PATH})
@@ -84,6 +87,7 @@ add_executable (
 	${HEADER}
 	${COMMON}
 	${SHADER}
+	${CONFIG_FILE}
 )
 
 set (

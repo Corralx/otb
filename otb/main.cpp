@@ -24,12 +24,13 @@ using millis = std::chrono::milliseconds;
 #include "occlusion.hpp"
 #include "rasterizer.hpp"
 #include "postprocess.hpp"
+#include "configuration.hpp"
 
 static constexpr uint32_t APP_WIDTH = 1280;
 static constexpr uint32_t APP_HEIGHT = 720;
 static constexpr char* APP_NAME = "Occlusion and Translucency Baker";
 static constexpr uint32_t MAP_SIZE = 2048;
-static constexpr char* RESOURCE_PATH = "resources/meshes/armor.obj";
+static constexpr char* CONFIG_FILENAME = "resources/config.json";
 
 #ifdef _DEBUG
 static void gl_debug_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, void* userParam);
@@ -50,6 +51,15 @@ int main(int, char*[])
 
 	chai.eval("helloWorld(\"Bob\");");
 	*/
+
+	if (!init_configuration(CONFIG_FILENAME))
+	{
+		std::cerr << "Error loading the configuration from file!" << std::endl;
+		return 1;
+	}
+
+	std::cout << "Selected shader path: " << global_config.shader_path << std::endl;
+	std::cout << "Selected output path: " << global_config.output_path << std::endl;
 
 	if (SDL_Init(SDL_INIT_VIDEO) != 0)
 	{
@@ -115,7 +125,8 @@ int main(int, char*[])
 	rmt_BindOpenGL();
 
 	std::cout << "Loading meshes..." << std::endl;
-	auto shapes = load_meshes(RESOURCE_PATH);
+	elk::path mesh_path("resources/meshes/armor.obj");
+	auto shapes = load_meshes(mesh_path);
 	if (shapes.empty())
 	{
 		std::cerr << "Error loading meshes!" << std::endl;
@@ -183,7 +194,7 @@ int main(int, char*[])
 	invert(occlusion_map).get();
 
 	std::cout << "Saving to disk..." << std::endl;
-	write_image("output/occlusion_map.hdr", occlusion_map);
+	write_image(global_config.output_path / "occlusion_map.hdr", occlusion_map);
 	std::cout << "Done!" << std::endl;
 
 	bool should_run = true;
