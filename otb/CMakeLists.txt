@@ -15,7 +15,7 @@ set (
 	rasterizer.cpp
 	postprocess.cpp
 	configuration.cpp
-	mesh_data_manager.cpp
+	binding_manager.cpp
 	imgui_sdl_bridge.cpp
 )
 
@@ -30,7 +30,7 @@ set (
 	postprocess.hpp
 	configuration.hpp
 	buffer_manager.hpp
-	mesh_data_manager.hpp
+	binding_manager.hpp
 	imgui_sdl_bridge.hpp
 )
 

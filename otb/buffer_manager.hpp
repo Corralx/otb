@@ -25,6 +25,7 @@ enum class buffer_usage : uint32_t
 
 extern SDL_Window* window;
 
+// TODO(Corralx): Figure out where to save the indices provided by the manager (maybe mesh/material?)
 class buffer_manager
 {
 public:

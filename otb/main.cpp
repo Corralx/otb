@@ -29,7 +29,7 @@ using millis = std::chrono::milliseconds;
 #include "postprocess.hpp"
 #include "configuration.hpp"
 #include "buffer_manager.hpp"
-#include "mesh_data_manager.hpp"
+#include "binding_manager.hpp"
 
 static constexpr uint32_t APP_WIDTH = 1280;
 static constexpr uint32_t APP_HEIGHT = 720;
@@ -164,14 +164,15 @@ int main(int, char*[])
 	const uint32_t mesh_index = 0;
 
 	buffer_manager buffer_mgr;
-	mesh_data_manager mesh_data_mgr(buffer_mgr);
+	binding_manager binding_mgr;
 	{
 		size_t vertices_index = buffer_mgr.create_buffer(buffer_type::VERTEX, buffer_usage::STATIC, shapes[mesh_index].vertices());
 		size_t normals_index = buffer_mgr.create_buffer(buffer_type::VERTEX, buffer_usage::STATIC, shapes[mesh_index].normals());
 		size_t tex_coords_index = buffer_mgr.create_buffer(buffer_type::VERTEX, buffer_usage::STATIC, shapes[mesh_index].texture_coords());
 		size_t faces_index = buffer_mgr.create_buffer(buffer_type::INDEX, buffer_usage::STATIC, shapes[mesh_index].faces());
 
-		mesh_data_mgr.bind_data(shapes[mesh_index], vertices_index, normals_index, tex_coords_index, faces_index);
+		binding_mgr.bind_data(shapes[mesh_index], buffer_mgr[vertices_index], buffer_mgr[normals_index],
+							  buffer_mgr[tex_coords_index], buffer_mgr[faces_index]);
 	}
 
 	std::cout << "Initializing Embree..." << std::endl;
@@ -229,7 +230,7 @@ int main(int, char*[])
 	glBindBufferBase(GL_UNIFORM_BUFFER, matrices_binding_point, buffer_mgr[matrices_buffer]);
 	glUniformBlockBinding(base_program.value(), matrices_block_index, matrices_binding_point);
 
-	uint32_t occlusion_vao = mesh_data_mgr[shapes[mesh_index]].occlusion_vao;
+	uint32_t occlusion_vao = binding_mgr[shapes[mesh_index]].occlusion_vao;
 	uint32_t occlusion_program = base_program.value();
 
 	bool should_run = true;
@@ -265,6 +266,7 @@ int main(int, char*[])
 		rmt_BeginCPUSample(SceneRender);
 		glBindVertexArray(occlusion_vao);
 		glUseProgram(occlusion_program);
+		glBindBuffer(GL_UNIFORM_BUFFER, buffer_mgr[matrices_buffer]);
 		void* matrices_ptr = glMapBufferRange(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4) * matrices.size(),
 											  GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
 		memcpy(matrices_ptr, matrices.data(), sizeof(glm::mat4) * matrices.size());

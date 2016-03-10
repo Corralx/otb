@@ -1,7 +1,6 @@
 #include "utils.hpp"
 
 #include "mesh.hpp"
-#include "mesh_data_manager.hpp"
 
 #include "tinyobjloader/tiny_obj_loader.h"
 #include "elektra/filesystem.hpp"

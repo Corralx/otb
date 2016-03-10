@@ -1,7 +1,5 @@
 #pragma once
 
-#include "buffer_manager.hpp"
-
 namespace elk
 {
 class path;
@@ -14,34 +12,29 @@ class path;
 
 class mesh_t;
 
-class mesh_data_manager
+class binding_manager
 {
 	struct data
 	{
 		uint32_t base_vao;		// Binds positions and normals
 		uint32_t occlusion_vao; // Binds positions and texture coordinates
 		uint32_t wireframe_vao; // Binds just the positions
-
-		size_t vertices_index;
-		size_t normals_index;
-		size_t tex_coords_index;
-		size_t faces_index;
 	};
 
 public:
-	mesh_data_manager(buffer_manager& buffer_mgr) : _buffer_mgr(buffer_mgr), _data() {}
+	binding_manager() = default;
 	// TODO(Corralx): Remove every active gl resources?
-	~mesh_data_manager() = default;
+	~binding_manager() = default;
 
-	mesh_data_manager(const mesh_data_manager&) = delete;
-	mesh_data_manager(mesh_data_manager&&) = default;
-	mesh_data_manager& operator=(const mesh_data_manager&) = delete;
-	mesh_data_manager& operator=(mesh_data_manager&&) = default;
+	binding_manager(const binding_manager&) = delete;
+	binding_manager(binding_manager&&) = default;
+	binding_manager& operator=(const binding_manager&) = delete;
+	binding_manager& operator=(binding_manager&&) = default;
 
 	// NOTE(Corralx): This creates the vaos and sets up the binding
 	// This MUST be called from the main thread as VAOs are not shared between contexts
-	void bind_data(const mesh_t&, size_t vertices_index, size_t normals_index,
-				   size_t tex_coords_index, size_t faces_index);
+	void bind_data(const mesh_t&, uint32_t vertices_buffer, uint32_t normals_buffer,
+				   uint32_t tex_coords_buffer, uint32_t faces_buffer);
 
 	data get(const mesh_t&) const;
 	data operator[](const mesh_t&) const;
@@ -50,6 +43,5 @@ public:
 	data operator[](uint32_t mesh_index) const;
 
 private:
-	buffer_manager& _buffer_mgr;
 	std::vector<data> _data;
 };
