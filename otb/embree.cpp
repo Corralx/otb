@@ -50,15 +50,16 @@ static const ray_mask mask =
 	0xFFFFFFFF
 };
 
-context::context()
+context::context() : _device(nullptr, rtcDeleteDevice), _scene(nullptr, rtcDeleteScene), _geometry()
 {
 	// Setting the CPU register flags
 	_MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
 	_MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
 
-	_device = rtcNewDevice();
-	_scene = rtcDeviceNewScene(_device, RTC_SCENE_STATIC | RTC_SCENE_INCOHERENT |
-							   RTC_SCENE_HIGH_QUALITY | RTC_SCENE_ROBUST, RTC_INTERSECT8);
+	_device.reset(rtcNewDevice());
+	auto scene_ptr = rtcDeviceNewScene(_device.get(), RTC_SCENE_STATIC | RTC_SCENE_INCOHERENT |
+									   RTC_SCENE_HIGH_QUALITY | RTC_SCENE_ROBUST, RTC_INTERSECT8);
+	_scene.reset(scene_ptr);
 
 	assert(_scene);
 	assert(_device);
@@ -67,13 +68,7 @@ context::context()
 context::~context()
 {
 	for (mesh_id id : _geometry)
-		rtcDeleteGeometry(_scene, id);
-
-	assert(_scene);
-	assert(_device);
-
-	rtcDeleteScene(_scene);
-	rtcDeleteDevice(_device);
+		rtcDeleteGeometry(_scene.get(), id);
 }
 
 mesh_id context::add_mesh(const mesh_t& mesh)
@@ -84,10 +79,12 @@ mesh_id context::add_mesh(const mesh_t& mesh)
 	assert(num_indices > 0);
 	assert(num_vertices > 0);
 
-	mesh_id id = rtcNewTriangleMesh(_scene, RTC_GEOMETRY_STATIC, num_indices, num_vertices);
+	auto scene_ptr = _scene.get();
+
+	mesh_id id = rtcNewTriangleMesh(scene_ptr, RTC_GEOMETRY_STATIC, num_indices, num_vertices);
 
 	auto& vertices = mesh.vertices();
-	vertex* embree_vertices = (vertex*)rtcMapBuffer(_scene, id, RTC_VERTEX_BUFFER);
+	vertex* embree_vertices = (vertex*)rtcMapBuffer(scene_ptr, id, RTC_VERTEX_BUFFER);
 	for (uint32_t i = 0; i < num_vertices; ++i)
 	{
 		embree_vertices[i].x = vertices[i].x;
@@ -95,17 +92,17 @@ mesh_id context::add_mesh(const mesh_t& mesh)
 		embree_vertices[i].z = vertices[i].z;
 		embree_vertices[i]._padding = .0f;
 	}
-	rtcUnmapBuffer(_scene, id, RTC_VERTEX_BUFFER);
+	rtcUnmapBuffer(scene_ptr, id, RTC_VERTEX_BUFFER);
 
 	auto& faces = mesh.faces();
-	triangle* embree_triangles = (triangle*)rtcMapBuffer(_scene, id, RTC_INDEX_BUFFER);
+	triangle* embree_triangles = (triangle*)rtcMapBuffer(scene_ptr, id, RTC_INDEX_BUFFER);
 	for (uint32_t i = 0; i < num_indices; ++i)
 	{
 		embree_triangles[i].v0 = faces[i].v0;
 		embree_triangles[i].v1 = faces[i].v1;
 		embree_triangles[i].v2 = faces[i].v2;
 	}
-	rtcUnmapBuffer(_scene, id, RTC_INDEX_BUFFER);
+	rtcUnmapBuffer(scene_ptr, id, RTC_INDEX_BUFFER);
 
 	_geometry.push_back(id);
 	return id;
@@ -117,18 +114,18 @@ void context::remove_mesh(mesh_id id)
 	assert(pos != std::end(_geometry));
 
 	_geometry.erase(pos);
-	rtcDeleteGeometry(_scene, id);
+	rtcDeleteGeometry(_scene.get(), id);
 }
 
 bool context::commit()
 {
-	rtcCommit(_scene);
+	rtcCommit(_scene.get());
 	return !has_error();
 }
 
 bool context::has_error()
 {
-	return rtcDeviceGetError(_device) != RTC_NO_ERROR;
+	return rtcDeviceGetError(_device.get()) != RTC_NO_ERROR;
 }
 
 intersect_result context::intersect(const ray& r, float max_distance, float min_distance)
@@ -150,7 +147,7 @@ intersect_result context::intersect(const ray& r, float max_distance, float min_
 		ray8.geomID[ray_id] = NO_HIT_ID;
 	}
 
-	rtcIntersect8(&mask, _scene, ray8);
+	rtcIntersect8(&mask, _scene.get(), ray8);
 
 	intersect_result res{};
 	for (uint32_t ray_id = 0; ray_id < 8; ++ray_id)
@@ -181,7 +178,7 @@ occluded_result context::occluded(const ray& r, float max_distance, float min_di
 		ray8.geomID[ray_id] = NO_HIT_ID;
 	}
 
-	rtcOccluded8(&mask, _scene, ray8);
+	rtcOccluded8(&mask, _scene.get(), ray8);
 
 	occluded_result res{};
 	for (uint32_t ray_id = 0; ray_id < 8; ++ray_id)

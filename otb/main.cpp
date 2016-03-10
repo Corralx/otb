@@ -134,7 +134,7 @@ int main(int, char*[])
 	rmt_BindOpenGL();
 
 	std::cout << "Loading meshes..." << std::endl;
-	elk::path mesh_path("resources/meshes/crate.obj");
+	elk::path mesh_path("resources/meshes/armor.obj");
 	auto shapes = load_meshes(mesh_path);
 	if (shapes.empty())
 	{
@@ -209,7 +209,7 @@ int main(int, char*[])
 	*/
 
 	glm::mat4 proj_matrix = glm::perspective(glm::radians(45.f), (float)APP_WIDTH / (float)APP_HEIGHT, 1.f, 1000.f);
-	glm::mat4 view_matrix = glm::lookAt(glm::vec3(.0f, .0f, 5.f), glm::vec3(.0f, .0f, 0.f), glm::vec3(.0f, 1.f, .0f));
+	glm::mat4 view_matrix = glm::lookAt(glm::vec3(.0f, .0f, 10.f), glm::vec3(.0f, .0f, 0.f), glm::vec3(.0f, 1.f, .0f));
 
 	bool should_run = true;
 	while (should_run)

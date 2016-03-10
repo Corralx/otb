@@ -65,7 +65,7 @@ bool is_ready(const std::future<T>& f)
 }
 
 template<typename Func, typename ...Args>
-std::future<void> async_apply(Func f, Args... args)
+std::future<void> async_apply(Func f, Args&&... args)
 {
 	std::promise<void> promise;
 	std::future<void> future = promise.get_future();

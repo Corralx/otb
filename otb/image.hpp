@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <cassert>
 #include <cstring>
+#include <memory>
 
 // TODO(Corralx): Eventually add other formats and storages
 enum class pixel_format : uint8_t
@@ -46,24 +47,23 @@ class image
 public:
 	image() = delete;
 	image(uint32_t width, uint32_t height) :
-		_data(nullptr), _width(width), _height(height)
+		_data(std::make_unique<Format[]>(width * height)), _width(width), _height(height)
 	{
-		_data = new Format[width * height];
-
 		assert(width > 0);
 		assert(height > 0);
-		assert(_data);
 	}
-	
-	~image()
-	{
-		assert(_data);
-		delete[] _data;
-	}
+
+	image(const image&) = delete;
+	image(image&&) = default;
+
+	image& operator=(const image&) = delete;
+	image& operator=(image&&) = default;
+
+	~image() = default;
 
 	void reset(uint8_t val)
 	{
-		memset(_data, val, memory());
+		memset(_data.get(), val, memory());
 	}
 
 	pixel_format format() const
@@ -84,12 +84,12 @@ public:
 
 	const Format* const raw() const
 	{
-		return _data;
+		return _data.get();
 	}
 
 	Format* raw()
 	{
-		return _data;
+		return _data.get();
 	}
 
 	uint32_t width() const
@@ -115,7 +115,7 @@ public:
 	}
 
 private:
-	Format* _data;
+	std::unique_ptr<Format[]> _data;
 	uint32_t _width;
 	uint32_t _height;
 };

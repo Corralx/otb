@@ -4,6 +4,7 @@
 #include <vector>
 #include <limits>
 #include <array>
+#include <memory>
 
 #include "glm/glm.hpp"
 
@@ -13,6 +14,9 @@ struct __RTCScene;
 
 namespace embree
 {
+
+template<typename T>
+using handle_ptr = std::unique_ptr<T, void(*)(T *)>;
 
 using mesh_id = uint32_t;
 
@@ -55,8 +59,8 @@ public:
 	occluded_result occluded(const ray& r, float max_distance, float min_distance = .0001f);
 
 private:
-	__RTCDevice* _device;
-	__RTCScene* _scene;
+	handle_ptr<__RTCDevice> _device;
+	handle_ptr<__RTCScene> _scene;
 
 	std::vector<mesh_id> _geometry;
 };
