@@ -1,9 +1,13 @@
 #include "utils.hpp"
 
+#include "mesh.hpp"
+#include "mesh_data_manager.hpp"
+
 #include "tinyobjloader/tiny_obj_loader.h"
 #include "elektra/filesystem.hpp"
 #include "elektra/file_io.hpp"
 #include "GL/gl3w.h"
+#include "glm/gtc/constants.hpp"
 
 #pragma warning (push, 0)
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -12,12 +16,12 @@
 
 #include <random>
 
-// TODO(Corralx): having an additional shared context to load resource asynchronously
-// NOTE(Corralx): Vertex Array Objects are not shared between context though!
-std::vector<mesh_t> load_meshes(const elk::path& path)
+// TODO(Corralx): Signal errors in some way
+// TODO(Corralx): Calculate smooth normals if not present
+static void load_meshes_helper(const elk::path& path, std::vector<mesh_t>& meshes)
 {
 	if (path.empty() || !elk::exists(path) || path.extension() != ".obj")
-		return std::vector<mesh_t>();
+		return;
 
 	std::vector<tinyobj::shape_t> shapes;
 	std::vector<tinyobj::material_t> materials;
@@ -25,9 +29,7 @@ std::vector<mesh_t> load_meshes(const elk::path& path)
 	std::string error;
 	bool result = tinyobj::LoadObj(shapes, materials, error, path.c_str());
 	if (!result)
-		return std::vector<mesh_t>();
-
-	std::vector<mesh_t> meshes;
+		return;
 
 	for (uint32_t i = 0; i < shapes.size(); ++i)
 	{
@@ -38,60 +40,83 @@ std::vector<mesh_t> load_meshes(const elk::path& path)
 		size_t num_tex_coords = tiny_mesh.texcoords.size() / 2;
 		size_t num_tris = tiny_mesh.indices.size() / 3;
 
-		// TODO(Corralx): Signal errors in some way
-		// TODO(Corralx): Calculate smooth normals if not present
 		if (num_vertices == 0 || num_tris == 0 || num_normals != num_vertices || num_tex_coords != num_vertices)
 			continue;
 
-		mesh_t mesh;
-
-		mesh._vertices.resize(num_vertices);
-		memcpy(mesh._vertices.data(), tiny_mesh.positions.data(), sizeof(vertex_t) * num_vertices);
-		mesh._normals.resize(num_normals);
-		memcpy(mesh._normals.data(), tiny_mesh.normals.data(), sizeof(normal_t) * num_normals);
-		mesh._coords.resize(num_tex_coords);
-		memcpy(mesh._coords.data(), tiny_mesh.texcoords.data(), sizeof(texture_coord_t) * num_tex_coords);
-		mesh._faces.resize(num_tris);
-		memcpy(mesh._faces.data(), tiny_mesh.indices.data(), sizeof(face_t) * num_tris);
-
-		mesh.init_buffers();
-
+		std::vector<vertex_t> vertices(num_vertices);
+		memcpy(vertices.data(), tiny_mesh.positions.data(), sizeof(vertex_t) * num_vertices);
+		std::vector<normal_t> normals(num_normals);
+		memcpy(normals.data(), tiny_mesh.normals.data(), sizeof(normal_t) * num_normals);
+		std::vector<texture_coord_t> coords(num_tex_coords);
+		memcpy(coords.data(), tiny_mesh.texcoords.data(), sizeof(texture_coord_t) * num_tex_coords);
+		std::vector<face_t> faces(num_tris);
+		memcpy(faces.data(), tiny_mesh.indices.data(), sizeof(face_t) * num_tris);
+		
+		mesh_t mesh(std::move(vertices), std::move(normals), std::move(coords), std::move(faces));
 		meshes.push_back(std::move(mesh));
 	}
+}
 
+std::vector<mesh_t> load_meshes(const elk::path& path)
+{
+	std::vector<mesh_t> meshes;
+	load_meshes_helper(path, meshes);
 	return std::move(meshes);
 }
 
-// TODO(Corralx): Load resource asynchronously
+static void load_meshes_async_helper(const elk::path& path, std::vector<mesh_t>& meshes, std::promise<void> promise)
+{
+	load_meshes_helper(path, meshes);
+	promise.set_value();
+}
+
+std::future<void> load_meshes_async(const elk::path& path, std::vector<mesh_t>& meshes)
+{
+	return async_apply(load_meshes_async_helper, std::ref(path), std::ref(meshes));
+}
+
 // NOTE(Corralx): An OpenGL context must be bound to the current thread for this to work
-elk::optional<uint32_t> load_program(const elk::path& vs_path, const elk::path& fs_path)
+elk::optional<uint32_t> load_program(const elk::path& vs_path, const elk::path& fs_path, elk::optional<elk::path> gs_path)
 {
 	auto vs_source = elk::get_content_of_file(vs_path);
 	auto fs_source = elk::get_content_of_file(fs_path);
+	auto gs_source = gs_path ? elk::get_content_of_file(gs_path.value()) : elk::nullopt;
 
 	if (!vs_source || !fs_source)
 		return elk::nullopt;
+
+	uint32_t program = glCreateProgram();
 
 	const char* vs_ptr = vs_source.value().c_str();
 	uint32_t vs = glCreateShader(GL_VERTEX_SHADER);
 	glShaderSource(vs, 1, &vs_ptr, nullptr);
 	glCompileShader(vs);
+	glAttachShader(program, vs);
 
 	const char* fs_ptr = fs_source.value().c_str();
 	uint32_t fs = glCreateShader(GL_FRAGMENT_SHADER);
 	glShaderSource(fs, 1, &fs_ptr, nullptr);
 	glCompileShader(fs);
-
-	uint32_t program = glCreateProgram();
-	glAttachShader(program, vs);
 	glAttachShader(program, fs);
+
+	uint32_t gs = 0;
+	if (gs_source)
+	{
+		const char* gs_ptr = gs_source.value().c_str();
+		gs = glCreateShader(GL_GEOMETRY_SHADER);
+		glShaderSource(gs, 1, &gs_ptr, nullptr);
+		glCompileShader(gs);
+		glAttachShader(program, gs);
+	}
+
 	glLinkProgram(program);
 
 	glDeleteShader(vs);
+	if (gs != 0)
+		glDeleteShader(gs);
 	glDeleteShader(fs);
 
 	assert(glGetError() == GL_NO_ERROR);
-
 	return program;
 }
 
@@ -165,7 +190,7 @@ glm::vec3 cosine_weighted_hemisphere_sample(glm::vec3 n)
 	double xi2 = random_double();
 
 	double  theta = acos(sqrt(1.0 - xi1));
-	double  phi = 2.0 * PI * xi2;
+	double  phi = 2.0 * glm::pi<double>() * xi2;
 
 	float xs = static_cast<float>(sin(theta) * cos(phi));
 	float ys = static_cast<float>(cos(theta));
@@ -195,7 +220,7 @@ std::vector<float> generate_gaussian_kernel_1d(float sigma, uint32_t kernel_size
 	auto gauss_generator = [](float x, float sigma)
 	{
 		float c = 2.f * sigma * sigma;
-		return std::exp(-x * x / c) / std::sqrt(c * (float)PI);
+		return std::exp(-x * x / c) / std::sqrt(c * glm::pi<float>());
 	};
 
 	// kernel generation
@@ -211,4 +236,10 @@ std::vector<float> generate_gaussian_kernel_1d(float sigma, uint32_t kernel_size
 		kernel[i] /= weight_sum;
 
 	return std::move(kernel);
+}
+
+uint32_t generate_unique_index()
+{
+	static uint32_t next_free_index = 0;
+	return next_free_index++;
 }

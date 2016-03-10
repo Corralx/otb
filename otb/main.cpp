@@ -28,6 +28,8 @@ using millis = std::chrono::milliseconds;
 #include "rasterizer.hpp"
 #include "postprocess.hpp"
 #include "configuration.hpp"
+#include "buffer_manager.hpp"
+#include "mesh_data_manager.hpp"
 
 static constexpr uint32_t APP_WIDTH = 1280;
 static constexpr uint32_t APP_HEIGHT = 720;
@@ -41,7 +43,6 @@ static constexpr char* CONFIG_FILENAME = "resources/config.json";
 static void gl_debug_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, void* userParam);
 #endif
 
-// TODO(Corralx): Investigate if we want a global SDL_Window variable
 SDL_Window* window;
 
 // TODO(Corralx): Investigate an ImGui file dialog and a notification system
@@ -81,6 +82,7 @@ int main(int, char*[])
 	SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, OPENGL_MAJOR_VERSION);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, OPENGL_MINOR_VERSION);
+	SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1);
 
 #ifdef _DEBUG
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG |
@@ -159,6 +161,19 @@ int main(int, char*[])
 	}
 	std::cout << std::endl;
 
+	const uint32_t mesh_index = 0;
+
+	buffer_manager buffer_mgr;
+	mesh_data_manager mesh_data_mgr(buffer_mgr);
+	{
+		size_t vertices_index = buffer_mgr.create_buffer(buffer_type::VERTEX_BUFFER, shapes[mesh_index].vertices());
+		size_t normals_index = buffer_mgr.create_buffer(buffer_type::VERTEX_BUFFER, shapes[mesh_index].normals());
+		size_t tex_coords_index = buffer_mgr.create_buffer(buffer_type::VERTEX_BUFFER, shapes[mesh_index].texture_coords());
+		size_t faces_index = buffer_mgr.create_buffer(buffer_type::INDEX_BUFFER, shapes[mesh_index].faces());
+
+		mesh_data_mgr.bind_data(shapes[mesh_index], vertices_index, normals_index, tex_coords_index, faces_index);
+	}
+
 	std::cout << "Initializing Embree..." << std::endl;
 	embree::context context;
 	for (const mesh_t& m : shapes)
@@ -168,10 +183,7 @@ int main(int, char*[])
 		std::cerr << "Error initializing Embree!" << std::endl;
 		return 1;
 	}
-
-	const uint32_t mesh_index = 0;
 	
-	/*
 	std::cout << "Rasterizing UVs..." << std::endl;
 	image<pixel_format::U32> indices_map(MAP_SIZE, MAP_SIZE);
 	indices_map.reset(255);
@@ -206,7 +218,6 @@ int main(int, char*[])
 	std::cout << "Saving to disk..." << std::endl;
 	write_image(global_config.output_path / "occlusion_map.hdr", occlusion_map);
 	std::cout << "Done!" << std::endl;
-	*/
 
 	glm::mat4 proj_matrix = glm::perspective(glm::radians(45.f), (float)APP_WIDTH / (float)APP_HEIGHT, 1.f, 1000.f);
 	glm::mat4 view_matrix = glm::lookAt(glm::vec3(.0f, .0f, 10.f), glm::vec3(.0f, .0f, 0.f), glm::vec3(.0f, 1.f, .0f));
@@ -235,21 +246,21 @@ int main(int, char*[])
 		}
 		rmt_EndCPUSample();
 
-		// TODO: Update
+		// Update
 
 		rmt_BeginCPUSample(BufferClear);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		rmt_EndCPUSample();
-
+		
 		rmt_BeginCPUSample(SceneRender);
-		glBindVertexArray(shapes[mesh_index]._vao);
+		glBindVertexArray(mesh_data_mgr[shapes[mesh_index]].occlusion_vao);
 		glUseProgram(base_program.value());
 		glUniformMatrix4fv(proj_location, 1, GL_FALSE, glm::value_ptr(proj_matrix));
 		glUniformMatrix4fv(view_location, 1, GL_FALSE, glm::value_ptr(view_matrix));
 		glDrawElements(GL_TRIANGLES, (uint32_t)shapes[mesh_index].faces().size() * 3, GL_UNSIGNED_INT, nullptr);
 		rmt_EndCPUSample();
 		assert(glGetError() == GL_NO_ERROR);
-		
+
 		rmt_BeginCPUSample(ImGuiRender);
 		imgui_new_frame();
 		{

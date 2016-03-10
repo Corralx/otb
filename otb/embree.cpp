@@ -2,7 +2,7 @@
 #include "mesh.hpp"
 #include "elektra/platforms.hpp"
 
-// TODO(Corralx): What about other os'es?
+// TODO(Corralx): Figure out other os'es headers?
 #ifdef ELK_PLATFORM_WINDOWS
 #include <xmmintrin.h>
 #include <pmmintrin.h>

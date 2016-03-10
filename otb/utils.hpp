@@ -1,27 +1,26 @@
 #pragma once
 
-#include "mesh.hpp"
 #include "image.hpp"
 
 #include "elektra/optional.hpp"
+#include "elektra/filesystem/path.hpp"
+#include "glm/glm.hpp"
 
 #include <cstdint>
 #include <future>
 #include <array>
 #include <vector>
 #include <thread>
+#include <future>
 
-constexpr double PI = 3.14159265358979323846264338327950288;
-
-namespace elk
-{
-class path;
-}
+class mesh_t;
 
 // TODO(Corralx): Found a generic way to return an error
 std::vector<mesh_t> load_meshes(const elk::path& path);
+std::future<void> load_meshes_async(const elk::path& path, std::vector<mesh_t>& meshes);
 
-elk::optional<uint32_t> load_program(const elk::path& vs_path, const elk::path& fs_path);
+elk::optional<uint32_t> load_program(const elk::path& vs_path, const elk::path& fs_path,
+									 elk::optional<elk::path> gs_path = elk::nullopt);
 
 enum class image_extension : uint8_t
 {
@@ -41,7 +40,6 @@ bool write_image(const elk::path& path, const image<pixel_format::F32>& image);
 bool point_in_tris(const glm::vec2& p, const glm::vec2& a, const glm::vec2& b, const glm::vec2& c);
 
 glm::vec3 cosine_weighted_hemisphere_sample(glm::vec3 n);
-
 
 std::vector<float> generate_gaussian_kernel_1d(float sigma, uint32_t kernel_size);
 
@@ -73,3 +71,5 @@ std::future<void> async_apply(Func f, Args&&... args)
 
 	return future;
 }
+
+uint32_t generate_unique_index();

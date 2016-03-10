@@ -14,8 +14,8 @@ set (
 	occlusion.cpp
 	rasterizer.cpp
 	postprocess.cpp
-	mesh.cpp
 	configuration.cpp
+	mesh_data_manager.cpp
 	imgui_sdl_bridge.cpp
 )
 
@@ -29,6 +29,8 @@ set (
 	rasterizer.hpp
 	postprocess.hpp
 	configuration.hpp
+	buffer_manager.hpp
+	mesh_data_manager.hpp
 	imgui_sdl_bridge.hpp
 )
 

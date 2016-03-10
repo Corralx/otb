@@ -2,8 +2,11 @@
 
 #include "glm/glm.hpp"
 
+#include "utils.hpp"
+
 #include <vector>
 #include <cstdint>
+#include <future>
 
 using vertex_t = glm::vec3;
 using normal_t = glm::vec3;
@@ -21,18 +24,22 @@ namespace elk
 class path;
 }
 
+// NOTE(Corralx): This is just a container for the mesh data
 class mesh_t
 {
-	friend std::vector<mesh_t> load_meshes(const elk::path& path);
-
-	mesh_t() = default;
-
 public:
+	mesh_t(std::vector<vertex_t>&& vertices, std::vector<normal_t>&& normals,
+		   std::vector<texture_coord_t>&& coords, std::vector<face_t>&& faces) :
+		   index(generate_unique_index()), _vertices(vertices), _normals(normals),
+		   _coords(coords), _faces(faces) {}
+
 	mesh_t(const mesh_t&) = delete;
 	mesh_t(mesh_t&&) = default;
 	mesh_t& operator=(const mesh_t&) = delete;
 	mesh_t& operator=(mesh_t&&) = default;
-	~mesh_t();
+
+	// NOTE(Corralx): A mesh releases his buffers but not the associated gl resources
+	~mesh_t() = default;
 
 	const std::vector<vertex_t>& vertices() const
 	{
@@ -54,16 +61,11 @@ public:
 		return _faces;
 	}
 
-	uint32_t _vao = 0;
+	const uint32_t index;
 
 private:
 	std::vector<vertex_t> _vertices;
 	std::vector<normal_t> _normals;
 	std::vector<texture_coord_t> _coords;
 	std::vector<face_t> _faces;
-
-	uint32_t _buffers[4];
-
-	// TODO(Corralx): A mesh should not know how to create gl buffers
-	void init_buffers();
 };

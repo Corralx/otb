@@ -36,7 +36,6 @@ struct ray
 	std::array<glm::vec3, 8> directions;
 };
 
-// TODO(Corralx): Support ray masking, not needed for now though
 class context
 {
 public:
