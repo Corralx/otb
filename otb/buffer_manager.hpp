@@ -12,8 +12,15 @@ using buffer_handle = uint32_t;
 
 enum class buffer_type : uint32_t
 {
-	VERTEX_BUFFER = GL_ARRAY_BUFFER,
-	INDEX_BUFFER = GL_ELEMENT_ARRAY_BUFFER
+	VERTEX = GL_ARRAY_BUFFER,
+	INDEX = GL_ELEMENT_ARRAY_BUFFER,
+	UNIFORM = GL_UNIFORM_BUFFER
+};
+
+enum class buffer_usage : uint32_t
+{
+	STATIC = GL_STATIC_DRAW,
+	DYNAMIC = GL_DYNAMIC_DRAW
 };
 
 extern SDL_Window* window;
@@ -45,7 +52,7 @@ public:
 	// NOTE(Corralx): We restore the original context if any to call
 	// create_buffer(...) either synchronously or asynchronously
 	template<typename T>
-	size_t create_buffer(buffer_type type, const std::vector<T>& data)
+	size_t create_buffer(buffer_type type, buffer_usage usage, const std::vector<T>& data)
 	{
 		auto old_context = SDL_GL_GetCurrentContext();
 		SDL_GL_MakeCurrent(window, _context);
@@ -53,7 +60,7 @@ public:
 		uint32_t handle;
 		glGenBuffers(1, &handle);
 		glBindBuffer((uint32_t)type, handle);
-		glBufferData((uint32_t)type, sizeof(T) * data.size(), data.data(), GL_STATIC_DRAW);
+		glBufferData((uint32_t)type, sizeof(T) * data.size(), data.data(), (uint32_t)usage);
 
 		size_t handle_index = _buffers.size();
 		_buffers.push_back(handle);

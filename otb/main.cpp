@@ -121,8 +121,8 @@ int main(int, char*[])
 		std::cerr << "Error while loading the base program!" << std::endl;
 		return 1;
 	}
-	int32_t proj_location = glGetUniformLocation(base_program.value(), "proj");
-	int32_t view_location = glGetUniformLocation(base_program.value(), "view");
+	uint32_t matrices_block_index = glGetUniformBlockIndex(base_program.value(), "Matrices");
+
 
 	rmtSettings* settings = rmt_Settings();
 	settings->input_handler_context = nullptr;
@@ -166,10 +166,10 @@ int main(int, char*[])
 	buffer_manager buffer_mgr;
 	mesh_data_manager mesh_data_mgr(buffer_mgr);
 	{
-		size_t vertices_index = buffer_mgr.create_buffer(buffer_type::VERTEX_BUFFER, shapes[mesh_index].vertices());
-		size_t normals_index = buffer_mgr.create_buffer(buffer_type::VERTEX_BUFFER, shapes[mesh_index].normals());
-		size_t tex_coords_index = buffer_mgr.create_buffer(buffer_type::VERTEX_BUFFER, shapes[mesh_index].texture_coords());
-		size_t faces_index = buffer_mgr.create_buffer(buffer_type::INDEX_BUFFER, shapes[mesh_index].faces());
+		size_t vertices_index = buffer_mgr.create_buffer(buffer_type::VERTEX, buffer_usage::STATIC, shapes[mesh_index].vertices());
+		size_t normals_index = buffer_mgr.create_buffer(buffer_type::VERTEX, buffer_usage::STATIC, shapes[mesh_index].normals());
+		size_t tex_coords_index = buffer_mgr.create_buffer(buffer_type::VERTEX, buffer_usage::STATIC, shapes[mesh_index].texture_coords());
+		size_t faces_index = buffer_mgr.create_buffer(buffer_type::INDEX, buffer_usage::STATIC, shapes[mesh_index].faces());
 
 		mesh_data_mgr.bind_data(shapes[mesh_index], vertices_index, normals_index, tex_coords_index, faces_index);
 	}
@@ -219,8 +219,18 @@ int main(int, char*[])
 	write_image(global_config.output_path / "occlusion_map.hdr", occlusion_map);
 	std::cout << "Done!" << std::endl;
 
-	glm::mat4 proj_matrix = glm::perspective(glm::radians(45.f), (float)APP_WIDTH / (float)APP_HEIGHT, 1.f, 1000.f);
-	glm::mat4 view_matrix = glm::lookAt(glm::vec3(.0f, .0f, 10.f), glm::vec3(.0f, .0f, 0.f), glm::vec3(.0f, 1.f, .0f));
+	std::vector<glm::mat4> matrices(3);
+	matrices[0] = glm::perspective(glm::radians(45.f), (float)APP_WIDTH / (float)APP_HEIGHT, 1.f, 1000.f);
+	matrices[1] = glm::lookAt(glm::vec3(.0f, .0f, 10.f), glm::vec3(.0f, .0f, 0.f), glm::vec3(.0f, 1.f, .0f));
+	matrices[2] = matrices[0] * matrices[1];
+
+	const uint32_t matrices_binding_point = 0;
+	size_t matrices_buffer = buffer_mgr.create_buffer(buffer_type::UNIFORM, buffer_usage::DYNAMIC, matrices);
+	glBindBufferBase(GL_UNIFORM_BUFFER, matrices_binding_point, buffer_mgr[matrices_buffer]);
+	glUniformBlockBinding(base_program.value(), matrices_block_index, matrices_binding_point);
+
+	uint32_t occlusion_vao = mesh_data_mgr[shapes[mesh_index]].occlusion_vao;
+	uint32_t occlusion_program = base_program.value();
 
 	bool should_run = true;
 	while (should_run)
@@ -253,10 +263,12 @@ int main(int, char*[])
 		rmt_EndCPUSample();
 		
 		rmt_BeginCPUSample(SceneRender);
-		glBindVertexArray(mesh_data_mgr[shapes[mesh_index]].occlusion_vao);
-		glUseProgram(base_program.value());
-		glUniformMatrix4fv(proj_location, 1, GL_FALSE, glm::value_ptr(proj_matrix));
-		glUniformMatrix4fv(view_location, 1, GL_FALSE, glm::value_ptr(view_matrix));
+		glBindVertexArray(occlusion_vao);
+		glUseProgram(occlusion_program);
+		void* matrices_ptr = glMapBufferRange(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4) * matrices.size(),
+											  GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
+		memcpy(matrices_ptr, matrices.data(), sizeof(glm::mat4) * matrices.size());
+		glUnmapBuffer(GL_UNIFORM_BUFFER);
 		glDrawElements(GL_TRIANGLES, (uint32_t)shapes[mesh_index].faces().size() * 3, GL_UNSIGNED_INT, nullptr);
 		rmt_EndCPUSample();
 		assert(glGetError() == GL_NO_ERROR);
