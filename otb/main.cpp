@@ -14,10 +14,15 @@ using millis = std::chrono::milliseconds;
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
 #include "glm/gtc/type_ptr.hpp"
+#include "glm/gtx/polar_coordinates.hpp"
 
 /*
 #include "chaiscript/chaiscript.hpp"
 #include "chaiscript/chaiscript_stdlib.hpp"
+
+chaiscript::ChaiScript chai(chaiscript::Std_Lib::library());
+chai.add(chaiscript::fun(&helloWorld), "helloWorld");
+chai.eval("helloWorld(\"Bob\");");
 */
 
 #include "utils.hpp"
@@ -36,7 +41,7 @@ static constexpr uint32_t APP_HEIGHT = 720;
 static constexpr char* APP_NAME = "Occlusion and Translucency Baker";
 static constexpr uint32_t OPENGL_MAJOR_VERSION = 3;
 static constexpr uint32_t OPENGL_MINOR_VERSION = 3;
-static constexpr uint32_t MAP_SIZE = 256;
+static constexpr uint32_t MAP_SIZE = 2048;
 static constexpr char* CONFIG_FILENAME = "resources/config.json";
 
 #ifdef _DEBUG
@@ -48,14 +53,6 @@ SDL_Window* window;
 // TODO(Corralx): Investigate an ImGui file dialog and a notification system
 int main(int, char*[])
 {
-	/*
-	chaiscript::ChaiScript chai(chaiscript::Std_Lib::library());
-	chai.add(chaiscript::fun(&helloWorld),
-			 "helloWorld");
-
-	chai.eval("helloWorld(\"Bob\");");
-	*/
-
 	if (!init_configuration(CONFIG_FILENAME))
 	{
 		std::cerr << "Error loading the configuration from file!" << std::endl;
@@ -122,8 +119,8 @@ int main(int, char*[])
 		return 1;
 	}
 	uint32_t matrices_block_index = glGetUniformBlockIndex(base_program.value(), "Matrices");
-
-
+	uint32_t occlusion_map_location = glGetUniformLocation(base_program.value(), "occlusion_map");
+	
 	rmtSettings* settings = rmt_Settings();
 	settings->input_handler_context = nullptr;
 	settings->input_handler = [](const char* text, void*)
@@ -190,6 +187,7 @@ int main(int, char*[])
 	indices_map.reset(255);
 	rasterize_triangle_hardware(shapes[mesh_index], indices_map).get();
 	std::cout << "Indices map occupies " << indices_map.memory() << " bytes!" << std::endl;
+	//write_image(global_config.output_path / "indices_map.png", indices_map, image_extension::PNG);
 
 	std::cout << "Calculating occlusion map..." << std::endl;
 	image<pixel_format::F32> occlusion_map(MAP_SIZE, MAP_SIZE);
@@ -203,7 +201,7 @@ int main(int, char*[])
 	params.quadratic_attenuation = 1.f;
 	params.tile_width = 64;
 	params.tile_height = 64;
-	params.quality = 1;
+	params.quality = 8;
 	params.worker_num = (uint8_t)elk::number_of_cores();
 
 	auto start_time = hr_clock::now();
@@ -213,17 +211,38 @@ int main(int, char*[])
 	std::cout << "Calculation has taken " << std::chrono::duration_cast<millis>(end_time - start_time).count() << " ms!" << std::endl;
 
 	std::cout << "Postprocessing occlusion map..." << std::endl;
-	gaussian_blur(occlusion_map, 1, 3, 1.f).get();
+	gaussian_blur(occlusion_map, 3, 3, 1.f).get();
 	invert(occlusion_map).get();
 
 	std::cout << "Saving to disk..." << std::endl;
 	write_image(global_config.output_path / "occlusion_map.hdr", occlusion_map);
 	std::cout << "Done!" << std::endl;
 
+	uint32_t occlusion_tex = 0;
+	uint32_t occlusion_tex_unit = 0;
+	glGenTextures(1, &occlusion_tex);
+	glBindTexture(GL_TEXTURE_2D, occlusion_tex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, occlusion_map.width(), occlusion_map.height(),
+				 0, GL_RED, GL_FLOAT, occlusion_map.raw());
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	glGenerateMipmap(GL_TEXTURE_2D);
+	glActiveTexture(GL_TEXTURE0 + occlusion_tex_unit);
+	glBindTexture(GL_TEXTURE_2D, occlusion_tex);
+	assert(glGetError() == GL_NO_ERROR);
+
+	float distance = 10.f;
+	float min_distance = 2.f;
+	float max_distance = 100.f;
+	float theta = .0f;
+	float phi = .0f;
+	float max_theta = 89.f;
+	glm::vec3 look_at_point(.0f);
+	glm::vec3 up_vector(.0f, 1.f, .0f);
+	glm::vec3 position;
+
 	std::vector<glm::mat4> matrices(3);
 	matrices[0] = glm::perspective(glm::radians(45.f), (float)APP_WIDTH / (float)APP_HEIGHT, 1.f, 1000.f);
-	matrices[1] = glm::lookAt(glm::vec3(.0f, .0f, 10.f), glm::vec3(.0f, .0f, 0.f), glm::vec3(.0f, 1.f, .0f));
-	matrices[2] = matrices[0] * matrices[1];
 
 	const uint32_t matrices_binding_point = 0;
 	size_t matrices_buffer = buffer_mgr.create_buffer(buffer_type::UNIFORM, buffer_usage::DYNAMIC, matrices);
@@ -233,10 +252,25 @@ int main(int, char*[])
 	uint32_t occlusion_vao = binding_mgr[shapes[mesh_index]].occlusion_vao;
 	uint32_t occlusion_program = base_program.value();
 
+	uint32_t previous_time = 0;
+	uint32_t current_time = SDL_GetTicks();
+	float delta_time = .0f;
+
+	// NOTE(Corralx): (0,0) is top-left
+	int32_t mouse_x = 0, mouse_y = 0;
+	SDL_GetMouseState(&mouse_x, &mouse_y);
+	int32_t old_mouse_x = 0, old_mouse_y = 0;
+	uint32_t mouse_state = 0;
+	int32_t wheel_delta = 0;
+
 	bool should_run = true;
 	while (should_run)
 	{
 		rmt_BeginCPUSample(RenderLoop);
+
+		previous_time = current_time;
+		current_time = SDL_GetTicks();
+		delta_time = (current_time - previous_time) / 1000.f;
 
 		rmt_BeginCPUSample(EventManagement);
 		SDL_Event event;
@@ -253,12 +287,44 @@ int main(int, char*[])
 					if (event.key.keysym.sym == SDLK_ESCAPE)
 						should_run = false;
 					break;
+
+				case SDL_MOUSEWHEEL:
+					wheel_delta = -event.wheel.y;
+					break;
+
+				default:
+					break;
 			}
 		}
 		rmt_EndCPUSample();
+		
+		// Update camera spring-arm parameter
+		old_mouse_x = mouse_x;
+		old_mouse_y = mouse_y;
+		mouse_state = SDL_GetMouseState(&mouse_x, &mouse_y);
+		float mouse_x_diff = (mouse_x - old_mouse_x) / (float)APP_WIDTH;
+		float mouse_y_diff = (mouse_y - old_mouse_y) / (float)APP_HEIGHT;
+		
+		if (mouse_state & SDL_BUTTON_LMASK)
+		{
+			phi -= mouse_x_diff * 360.f;
+			theta += mouse_y_diff * 360.f;
+			theta = clamp(theta, -max_theta, max_theta);
+		}
 
-		// Update
+		if (wheel_delta != 0)
+		{
+			distance += wheel_delta * delta_time * 500.f;
+			distance = clamp(distance, min_distance, max_distance);
+			wheel_delta = 0;
+		}
+		
+		// Recalculate camera matrices
+		position = glm::euclidean(glm::vec2(glm::radians(theta), glm::radians(phi))) * distance;
+		matrices[1] = glm::lookAt(position, look_at_point, up_vector);
+		matrices[2] = matrices[0] * matrices[1];
 
+		// Render
 		rmt_BeginCPUSample(BufferClear);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		rmt_EndCPUSample();
@@ -271,6 +337,7 @@ int main(int, char*[])
 											  GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
 		memcpy(matrices_ptr, matrices.data(), sizeof(glm::mat4) * matrices.size());
 		glUnmapBuffer(GL_UNIFORM_BUFFER);
+		glUniform1i(occlusion_map_location, occlusion_tex_unit);
 		glDrawElements(GL_TRIANGLES, (uint32_t)shapes[mesh_index].faces().size() * 3, GL_UNSIGNED_INT, nullptr);
 		rmt_EndCPUSample();
 		assert(glGetError() == GL_NO_ERROR);

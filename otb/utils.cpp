@@ -144,6 +144,31 @@ bool write_image(const elk::path& path, const image<pixel_format::U8>& image, im
 	return false;
 }
 
+template<>
+bool write_image(const elk::path& path, const image<pixel_format::U32>& image, image_extension ext)
+{
+	assert(image.width() > 0);
+	assert(image.height() > 0);
+	assert(image.raw());
+
+	switch (ext)
+	{
+		case image_extension::BMP:
+			return stbi_write_bmp(path.c_str(), image.width(), image.height(), 4, image.raw()) != 0;
+
+		case image_extension::PNG:
+			return stbi_write_png(path.c_str(), image.width(), image.height(), 4, image.raw(), 0) != 0;
+
+		case image_extension::TGA:
+			return stbi_write_tga(path.c_str(), image.width(), image.height(), 4, image.raw()) != 0;
+
+		default:
+			assert(false);
+	}
+
+	return false;
+}
+
 bool write_image(const elk::path& path, const image<pixel_format::F32>& image)
 {
 	assert(image.width() > 0);
