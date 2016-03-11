@@ -45,6 +45,9 @@ set (
 	SHADER
 	${SHADER_DIR}/base.vs
 	${SHADER_DIR}/base.fs
+	${SHADER_DIR}/wireframe.vs
+	${SHADER_DIR}/wireframe.gs
+	${SHADER_DIR}/wireframe.fs
 )
 
 set (
