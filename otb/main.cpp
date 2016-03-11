@@ -40,7 +40,7 @@ static constexpr uint32_t APP_HEIGHT = 720;
 static constexpr char* APP_NAME = "Occlusion and Translucency Baker";
 static constexpr uint32_t OPENGL_MAJOR_VERSION = 3;
 static constexpr uint32_t OPENGL_MINOR_VERSION = 3;
-static constexpr uint32_t MAP_SIZE = 1024;
+static constexpr uint32_t MAP_SIZE = 256;
 static constexpr char* CONFIG_FILENAME = "resources/config.json";
 
 #ifdef _DEBUG
@@ -103,23 +103,38 @@ int main(int, char*[])
 
 	imgui_init(window);
 
-	glEnable(GL_DEPTH_TEST);
+	//glEnable(GL_DEPTH_TEST);
+	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_STENCIL_TEST);
-	glEnable(GL_CULL_FACE);
-	glCullFace(GL_BACK);
+	//glEnable(GL_CULL_FACE);
+	//glCullFace(GL_BACK);
+	glDisable(GL_CULL_FACE);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	glViewport(0, 0, APP_WIDTH, APP_HEIGHT);
 	glClearColor(1.f, .0f, .0f, 1.f);
 	SDL_GL_SetSwapInterval(0);
 
-	auto base_program = load_program(global_config.shader_path / "base.vs", global_config.shader_path / "base.fs");
-	if (!base_program)
+	/*
+	auto occlusion_program = load_program(global_config.shader_path / "base.vs", global_config.shader_path / "base.fs");
+	if (!occlusion_program)
 	{
-		std::cerr << "Error while loading the base program!" << std::endl;
+		std::cerr << "Error while loading the occlusion program!" << std::endl;
 		return 1;
 	}
-	uint32_t matrices_block_index = glGetUniformBlockIndex(base_program.value(), "Matrices");
-	uint32_t occlusion_map_location = glGetUniformLocation(base_program.value(), "occlusion_map");
-	
+	uint32_t matrices_block_index = glGetUniformBlockIndex(occlusion_program.value(), "Matrices");
+	uint32_t occlusion_map_location = glGetUniformLocation(occlusion_program.value(), "occlusion_map");
+	*/
+
+	auto wireframe_program = load_program(global_config.shader_path / "wireframe.vs", global_config.shader_path / "wireframe.fs",
+										  global_config.shader_path / "wireframe.gs");
+	if (!wireframe_program)
+	{
+		std::cerr << "Error while loading the wireframe program!" << std::endl;
+		return 1;
+	}
+	uint32_t matrices_block_index = glGetUniformBlockIndex(wireframe_program.value(), "Matrices");
+
 	rmtSettings* settings = rmt_Settings();
 	settings->input_handler_context = nullptr;
 	settings->input_handler = [](const char* text, void*)
@@ -206,7 +221,7 @@ int main(int, char*[])
 	params.quadratic_attenuation = 1.f;
 	params.tile_width = 64;
 	params.tile_height = 64;
-	params.quality = 8;
+	params.quality = 1;
 	params.worker_num = (uint8_t)elk::number_of_cores();
 
 	start_time = hr_clock::now();
@@ -255,10 +270,13 @@ int main(int, char*[])
 	const uint32_t matrices_binding_point = 0;
 	size_t matrices_buffer = buffer_mgr.create_buffer(buffer_type::UNIFORM, buffer_usage::DYNAMIC, matrices);
 	glBindBufferBase(GL_UNIFORM_BUFFER, matrices_binding_point, buffer_mgr[matrices_buffer]);
-	glUniformBlockBinding(base_program.value(), matrices_block_index, matrices_binding_point);
+	//glUniformBlockBinding(occlusion_program.value(), matrices_block_index, matrices_binding_point);
+	glUniformBlockBinding(wireframe_program.value(), matrices_block_index, matrices_binding_point);
 
-	uint32_t occlusion_vao = binding_mgr[shapes[mesh_index]].occlusion_vao;
-	uint32_t occlusion_program = base_program.value();
+	//uint32_t occlusion_vao = binding_mgr[shapes[mesh_index]].occlusion_vao;
+	//uint32_t occlusion_program_handle = occlusion_program.value();
+	uint32_t wireframe_vao = binding_mgr[shapes[mesh_index]].wireframe_vao;
+	uint32_t wireframe_program_handle = wireframe_program.value();
 
 	uint32_t previous_time = 0;
 	uint32_t current_time = SDL_GetTicks();
@@ -338,14 +356,16 @@ int main(int, char*[])
 		rmt_EndCPUSample();
 		
 		rmt_BeginCPUSample(SceneRender);
-		glBindVertexArray(occlusion_vao);
-		glUseProgram(occlusion_program);
+		//glBindVertexArray(occlusion_vao);
+		//glUseProgram(occlusion_program_handle);
+		glBindVertexArray(wireframe_vao);
+		glUseProgram(wireframe_program_handle);
 		glBindBuffer(GL_UNIFORM_BUFFER, buffer_mgr[matrices_buffer]);
 		void* matrices_ptr = glMapBufferRange(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4) * matrices.size(),
 											  GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
 		memcpy(matrices_ptr, matrices.data(), sizeof(glm::mat4) * matrices.size());
 		glUnmapBuffer(GL_UNIFORM_BUFFER);
-		glUniform1i(occlusion_map_location, occlusion_tex_unit);
+		//glUniform1i(occlusion_map_location, occlusion_tex_unit);
 		glDrawElements(GL_TRIANGLES, (uint32_t)shapes[mesh_index].faces().size() * 3, GL_UNSIGNED_INT, nullptr);
 		rmt_EndCPUSample();
 		assert(glGetError() == GL_NO_ERROR);
