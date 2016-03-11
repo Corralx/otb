@@ -133,7 +133,7 @@ int main(int, char*[])
 	rmt_BindOpenGL();
 
 	std::cout << "Loading meshes..." << std::endl;
-	elk::path mesh_path("resources/meshes/armor.obj");
+	elk::path mesh_path("resources/meshes/xwing.obj");
 	auto shapes = load_meshes(mesh_path);
 	if (shapes.empty())
 	{
@@ -158,7 +158,7 @@ int main(int, char*[])
 	}
 	std::cout << std::endl;
 
-	const uint32_t mesh_index = 0;
+	const uint32_t mesh_index = 1;
 
 	buffer_manager buffer_mgr;
 	binding_manager binding_mgr;
@@ -194,14 +194,14 @@ int main(int, char*[])
 	occlusion_map.reset(0);
 
 	occlusion_params params{};
-	params.min_distance = .0001f;
+	params.min_distance = .001f;
 	params.max_distance = 5.f;
 	params.smooth_normal_interpolation = true;
 	params.linear_attenuation = 1.f;
 	params.quadratic_attenuation = 1.f;
 	params.tile_width = 64;
 	params.tile_height = 64;
-	params.quality = 8;
+	params.quality = 32;
 	params.worker_num = (uint8_t)elk::number_of_cores();
 
 	auto start_time = hr_clock::now();

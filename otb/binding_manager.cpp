@@ -41,6 +41,10 @@ void binding_manager::bind_data(const mesh_t& mesh, uint32_t vertices_buffer, ui
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, faces_buffer);
 
+	// Resize if there is no enough space
+	// insert(...) is supposed to resize for us but Microsoft STL doesn't seems to agree
+	if (mesh.index >= _data.size())
+		_data.resize(mesh.index + 1);
 	_data.insert(_data.begin() + mesh.index, { vaos[0], vaos[1], vaos[2] });
 
 	glBindVertexArray(0);
