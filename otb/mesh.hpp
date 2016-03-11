@@ -3,6 +3,7 @@
 #include "glm/glm.hpp"
 
 #include "utils.hpp"
+#include "material.hpp"
 
 #include <vector>
 #include <cstdint>
@@ -61,6 +62,24 @@ public:
 		return _faces;
 	}
 
+	const size_t memory() const
+	{
+		return	sizeof(vertex_t) * _vertices.size() +
+				sizeof(normal_t) * _normals.size() +
+				sizeof(texture_coord_t) * _coords.size() +
+				sizeof(face_t) * _faces.size();
+	}
+
+	material_t& material()
+	{
+		return _material;
+	}
+
+	const material_t& material() const
+	{
+		return _material;
+	}
+
 	const uint32_t index;
 
 private:
@@ -68,4 +87,6 @@ private:
 	std::vector<normal_t> _normals;
 	std::vector<texture_coord_t> _coords;
 	std::vector<face_t> _faces;
+
+	material_t _material;
 };

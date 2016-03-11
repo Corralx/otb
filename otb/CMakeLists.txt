@@ -16,6 +16,7 @@ set (
 	postprocess.cpp
 	configuration.cpp
 	binding_manager.cpp
+	render_manager.cpp
 	imgui_sdl_bridge.cpp
 )
 
@@ -31,6 +32,9 @@ set (
 	configuration.hpp
 	buffer_manager.hpp
 	binding_manager.hpp
+	render_manager.hpp
+	material.hpp
+	program.hpp
 	imgui_sdl_bridge.hpp
 )
 
@@ -43,8 +47,8 @@ set (
 
 set (
 	SHADER
-	${SHADER_DIR}/base.vs
-	${SHADER_DIR}/base.fs
+	${SHADER_DIR}/occlusion.vs
+	${SHADER_DIR}/occlusion.fs
 	${SHADER_DIR}/wireframe.vs
 	${SHADER_DIR}/wireframe.gs
 	${SHADER_DIR}/wireframe.fs

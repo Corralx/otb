@@ -34,6 +34,7 @@ chai.eval("helloWorld(\"Bob\");");
 #include "configuration.hpp"
 #include "buffer_manager.hpp"
 #include "binding_manager.hpp"
+#include "render_manager.hpp"
 
 static constexpr uint32_t APP_WIDTH = 1280;
 static constexpr uint32_t APP_HEIGHT = 720;
@@ -147,7 +148,7 @@ int main(int, char*[])
 	rmt_BindOpenGL();
 
 	std::cout << "Loading meshes..." << std::endl;
-	elk::path mesh_path("resources/meshes/xwing.obj");
+	elk::path mesh_path("resources/meshes/armor.obj");
 	auto start_time = hr_clock::now();
 	auto shapes = load_meshes(mesh_path);
 	auto end_time = hr_clock::now();
@@ -175,7 +176,7 @@ int main(int, char*[])
 	}
 	std::cout << std::endl;
 
-	const uint32_t mesh_index = 1;
+	const uint32_t mesh_index = 0;
 
 	buffer_manager buffer_mgr;
 	binding_manager binding_mgr;
@@ -259,7 +260,7 @@ int main(int, char*[])
 	float max_distance = 100.f;
 	float theta = .0f;
 	float phi = .0f;
-	float max_theta = 89.f;
+	float max_theta = 75.f;
 	glm::vec3 look_at_point(.0f);
 	glm::vec3 up_vector(.0f, 1.f, .0f);
 	glm::vec3 position;
@@ -288,6 +289,13 @@ int main(int, char*[])
 	int32_t old_mouse_x = 0, old_mouse_y = 0;
 	uint32_t mouse_state = 0;
 	int32_t wheel_delta = 0;
+
+	render_manager renderer(binding_mgr);
+	if (!renderer.init())
+	{
+		std::cout << "Failed to initialize the render manager!" << std::endl;
+		return 1;
+	}
 
 	bool should_run = true;
 	while (should_run)

@@ -267,3 +267,14 @@ uint32_t generate_unique_index()
 	static uint32_t next_free_index = 0;
 	return next_free_index++;
 }
+
+void update_texture_data(material_t mat, const image<pixel_format::F32>& image)
+{
+	int32_t last_texture;
+	glGetIntegerv(GL_TEXTURE_BINDING_2D, &last_texture);
+
+	glBindTexture(GL_TEXTURE_2D, mat.texture_id);
+	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, image.width(), image.height(), GL_RED, GL_FLOAT, image.raw());
+
+	glBindTexture(GL_TEXTURE_2D, last_texture);
+}

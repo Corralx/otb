@@ -1,4 +1,11 @@
 {
 	"shader_path" : "resources/shaders",
-	"output_path" : "output"
+	"output_path" : "output",
+	"base_vertex_shader" : "base.vs",
+	"base_fragment_shader" : "base.fs",
+	"occlusion_vertex_shader" : "base.vs",
+	"occlusion_fragment_shader" : "base.fs",
+	"wireframe_vertex_shader" : "wireframe.vs",
+	"wireframe_geometry_shader" : "wireframe.gs",
+	"wireframe_fragment_shader" : "wireframe.fs"
 }

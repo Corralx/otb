@@ -1,6 +1,7 @@
 #pragma once
 
 #include "image.hpp"
+#include "material.hpp"
 
 #include "elektra/optional.hpp"
 #include "elektra/filesystem/path.hpp"
@@ -73,3 +74,5 @@ std::future<void> async_apply(Func f, Args&&... args)
 }
 
 uint32_t generate_unique_index();
+
+void update_texture_data(material_t mat, const image<pixel_format::F32>& image);
