@@ -13,7 +13,6 @@ using millis = std::chrono::milliseconds;
 #include "elektra/machine_specs.hpp"
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
-#include "glm/gtc/type_ptr.hpp"
 #include "glm/gtx/polar_coordinates.hpp"
 
 /*
@@ -41,7 +40,7 @@ static constexpr uint32_t APP_HEIGHT = 720;
 static constexpr char* APP_NAME = "Occlusion and Translucency Baker";
 static constexpr uint32_t OPENGL_MAJOR_VERSION = 3;
 static constexpr uint32_t OPENGL_MINOR_VERSION = 3;
-static constexpr uint32_t MAP_SIZE = 2048;
+static constexpr uint32_t MAP_SIZE = 1024;
 static constexpr char* CONFIG_FILENAME = "resources/config.json";
 
 #ifdef _DEBUG
@@ -134,7 +133,10 @@ int main(int, char*[])
 
 	std::cout << "Loading meshes..." << std::endl;
 	elk::path mesh_path("resources/meshes/xwing.obj");
+	auto start_time = hr_clock::now();
 	auto shapes = load_meshes(mesh_path);
+	auto end_time = hr_clock::now();
+	std::cout << "Loading has taken " << std::chrono::duration_cast<millis>(end_time - start_time).count() << " ms!" << std::endl;
 	if (shapes.empty())
 	{
 		std::cerr << "Error loading meshes!" << std::endl;
@@ -185,8 +187,11 @@ int main(int, char*[])
 	std::cout << "Rasterizing UVs..." << std::endl;
 	image<pixel_format::U32> indices_map(MAP_SIZE, MAP_SIZE);
 	indices_map.reset(255);
+	start_time = hr_clock::now();
 	rasterize_triangle_hardware(shapes[mesh_index], indices_map).get();
+	end_time = hr_clock::now();
 	std::cout << "Indices map occupies " << indices_map.memory() << " bytes!" << std::endl;
+	std::cout << "Rasterizing has taken " << std::chrono::duration_cast<millis>(end_time - start_time).count() << " ms!" << std::endl;
 	//write_image(global_config.output_path / "indices_map.png", indices_map, image_extension::PNG);
 
 	std::cout << "Calculating occlusion map..." << std::endl;
@@ -194,25 +199,28 @@ int main(int, char*[])
 	occlusion_map.reset(0);
 
 	occlusion_params params{};
-	params.min_distance = .001f;
+	params.min_distance = .6f;
 	params.max_distance = 5.f;
 	params.smooth_normal_interpolation = true;
-	params.linear_attenuation = 1.f;
+	params.linear_attenuation = .8f;
 	params.quadratic_attenuation = 1.f;
 	params.tile_width = 64;
 	params.tile_height = 64;
-	params.quality = 32;
+	params.quality = 8;
 	params.worker_num = (uint8_t)elk::number_of_cores();
 
-	auto start_time = hr_clock::now();
+	start_time = hr_clock::now();
 	generate_occlusion_map(context, shapes[mesh_index], params, indices_map, occlusion_map).get();
-	auto end_time = hr_clock::now();
+	end_time = hr_clock::now();
 	std::cout << "Occlusion map occupies " << occlusion_map.memory() << " bytes!" << std::endl;
 	std::cout << "Calculation has taken " << std::chrono::duration_cast<millis>(end_time - start_time).count() << " ms!" << std::endl;
 
 	std::cout << "Postprocessing occlusion map..." << std::endl;
+	start_time = hr_clock::now();
 	gaussian_blur(occlusion_map, 3, 3, 1.f).get();
 	invert(occlusion_map).get();
+	end_time = hr_clock::now();
+	std::cout << "Postprocessing has taken " << std::chrono::duration_cast<millis>(end_time - start_time).count() << " ms!" << std::endl;
 
 	std::cout << "Saving to disk..." << std::endl;
 	write_image(global_config.output_path / "occlusion_map.hdr", occlusion_map);
