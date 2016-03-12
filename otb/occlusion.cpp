@@ -192,6 +192,8 @@ static void generate_occlusion_helper(embree::context& ctx, const mesh_t& mesh, 
 	promise.set_value();
 }
 
+// TODO(Corralx): Eventually cache occlusions map for params set
+// TODO(Corralx): Separate ray occlusion calculation from occlusion map generation to reuse data
 std::future<void> generate_occlusion_map(embree::context& ctx, const mesh_t& mesh, const occlusion_params& params,
 										 const image_u32& indices_map, image_f32& image)
 {

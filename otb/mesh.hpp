@@ -25,14 +25,28 @@ namespace elk
 class path;
 }
 
+// TODO(Corralx): Move bindings to load function and save into mesh
+struct bindings_t
+{
+	size_t vertices_index;
+	size_t normals_index;
+	size_t tex_coords_index;
+	size_t faces_index;
+
+	uint32_t base_vao;
+	uint32_t occlusion_vao;
+	uint32_t wireframe_vao;
+};
+
 // NOTE(Corralx): This is just a container for the mesh data
 class mesh_t
 {
 public:
+	// TODO(Corralx): Init mesh with all the missing data (material and bindings)
 	mesh_t(std::vector<vertex_t>&& vertices, std::vector<normal_t>&& normals,
 		   std::vector<texture_coord_t>&& coords, std::vector<face_t>&& faces) :
 		   index(generate_unique_index()), _vertices(vertices), _normals(normals),
-		   _coords(coords), _faces(faces) {}
+		   _coords(coords), _faces(faces), _material(), _bindings() {}
 
 	mesh_t(const mesh_t&) = delete;
 	mesh_t(mesh_t&&) = default;
@@ -80,6 +94,11 @@ public:
 		return _material;
 	}
 
+	const bindings_t& bindings() const
+	{
+		return _bindings;
+	}
+
 	const uint32_t index;
 
 private:
@@ -89,4 +108,5 @@ private:
 	std::vector<face_t> _faces;
 
 	material_t _material;
+	bindings_t _bindings;
 };

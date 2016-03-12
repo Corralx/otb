@@ -29,7 +29,7 @@ public:
 
 	bool init();
 
-	// TODO(Corralx): Pass the camera to render for
+	// TODO(Corralx): Pass the camera
 	void render(const std::vector<mesh_t>& scene);
 
 private:
@@ -39,6 +39,7 @@ private:
 	void render_occlusion_geometry();
 	void render_wireframe_geometry();
 
+	// TODO(Corralx): Pass the camera
 	void update_matrices();
 
 	binding_manager& _binding_mgr;

@@ -13,12 +13,9 @@ bool render_manager::init()
 	if (!load_programs())
 		return false;
 
-	// TODO(Corralx): Init the rest?
-
 	return true;
 }
 
-// TODO(Corralx): We shouldn't need the matrices_index in the program
 bool render_manager::load_programs()
 {
 	{

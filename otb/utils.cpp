@@ -50,7 +50,14 @@ static void load_meshes_helper(const elk::path& path, std::vector<mesh_t>& meshe
 		memcpy(coords.data(), tiny_mesh.texcoords.data(), sizeof(texture_coord_t) * num_tex_coords);
 		std::vector<face_t> faces(num_tris);
 		memcpy(faces.data(), tiny_mesh.indices.data(), sizeof(face_t) * num_tris);
-		
+
+		material_t material{};
+		material.color = random_color();
+		material.state = material_t::state_t::BASE;
+
+		bindings_t bindings{};
+		// TODO(Corralx)
+
 		mesh_t mesh(std::move(vertices), std::move(normals), std::move(coords), std::move(faces));
 		meshes.push_back(std::move(mesh));
 	}
@@ -277,4 +284,9 @@ void update_texture_data(material_t mat, const image<pixel_format::F32>& image)
 	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, image.width(), image.height(), GL_RED, GL_FLOAT, image.raw());
 
 	glBindTexture(GL_TEXTURE_2D, last_texture);
+}
+
+glm::vec3 random_color()
+{
+	return { (float)random_double(), (float)random_double(), (float)random_double() };
 }
