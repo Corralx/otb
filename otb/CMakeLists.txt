@@ -47,6 +47,8 @@ set (
 
 set (
 	SHADER
+	${SHADER_DIR}/base.vs
+	${SHADER_DIR}/base.fs
 	${SHADER_DIR}/occlusion.vs
 	${SHADER_DIR}/occlusion.fs
 	${SHADER_DIR}/wireframe.vs

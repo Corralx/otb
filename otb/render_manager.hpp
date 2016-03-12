@@ -13,12 +13,12 @@ class render_manager
 {
 	struct data_t
 	{
-		data_t(uint32_t _prim_num, uint32_t _vao, material_t _mat) :
+		data_t(uint32_t _prim_num, uint32_t _vao, const material_t& _mat) :
 			primitive_num(_prim_num), vao(_vao), material(_mat) {}
 
 		uint32_t primitive_num;
 		uint32_t vao;
-		material_t material;
+		const material_t& material;
 	};
 
 public:
@@ -29,6 +29,7 @@ public:
 
 	bool init();
 
+	// TODO(Corralx): Pass the camera to render for
 	void render(const std::vector<mesh_t>& scene);
 
 private:
@@ -37,6 +38,8 @@ private:
 	void render_base_geometry();
 	void render_occlusion_geometry();
 	void render_wireframe_geometry();
+
+	void update_matrices();
 
 	binding_manager& _binding_mgr;
 
