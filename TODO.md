@@ -1,2 +1,1 @@
-Corralx:
-* Try to transform every double loop into a single loop (could make performance better)
+* command line interface to avoid opening the window and OpenGL completely as dependencies (requires a separation of the occlusion computation library from the visualisation)
